@@ -1,0 +1,28 @@
+{
+    "name": "@robot.com/better-mqtt",
+    "version": "0.1.0",
+    "exports": {
+        ".": "./src/index.ts",
+        "./react": "./src/react/index.tsx"
+    },
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/robot-com/oss.git"
+    },
+    "scripts": {
+        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts"
+    },
+    "dependencies": {
+        "ee-ts": "^1.0.2",
+        "mqtt": "^5.13.2"
+    },
+    "devDependencies": {
+        "@types/node": "^20.19.2",
+        "tsconfig": "*",
+        "tsx": "^4.20.3"
+    },
+    "peerDependencies": {
+        "react": "^18.3.1"
+    }
+}

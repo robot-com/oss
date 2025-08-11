@@ -1,0 +1,258 @@
+import { EventEmitter } from 'ee-ts'
+import {
+    connect,
+    connectAsync,
+    type ErrorWithReasonCode,
+    type IClientOptions,
+    type MqttClient,
+} from 'mqtt'
+import { createAsyncGenerator } from './generator'
+import { matchTopic } from './match'
+
+export interface BetterMQTTEvents {
+    status(status: 'online' | 'offline'): void
+    error(error: Error | ErrorWithReasonCode): void
+    end(): void
+}
+
+export type MessageParser<T = string> = (message: Buffer) => T
+
+export function stringParser(message: Buffer): string {
+    return message.toString('utf8')
+}
+
+export function jsonParser<T = unknown>(message: Buffer): T {
+    return JSON.parse(message.toString('utf8'))
+}
+
+export function binaryParser(message: Buffer): Buffer {
+    return message
+}
+
+export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
+    readonly client: MqttClient
+    error: Error | ErrorWithReasonCode | null = null
+
+    get status() {
+        return this.client.connected ? 'online' : 'offline'
+    }
+
+    private sharedMqttSubscriptions: Map<string, Set<Subscription<unknown>>> =
+        new Map()
+
+    constructor(client: MqttClient) {
+        super()
+
+        this.client = client
+        this.client.on('offline', () => {
+            this.emit('status', 'offline')
+        })
+
+        this.client.on('connect', () => {
+            this.emit('status', 'online')
+        })
+
+        this.client.on('connect', () => {
+            this.emit('status', 'online')
+        })
+
+        this.client.on('error', (error) => {
+            this.error = error
+            this.emit('error', error)
+        })
+
+        this.client.on('message', (topic, message) => {
+            const subscriptions: [Set<Subscription<unknown>>, string[]][] = []
+            for (const [
+                pattern,
+                set,
+            ] of this.sharedMqttSubscriptions.entries()) {
+                const match = matchTopic(topic, pattern)
+                if (match) {
+                    subscriptions.push([set, match.params])
+                }
+            }
+
+            for (const [set, params] of subscriptions) {
+                for (const sub of set) {
+                    sub.handleMessage(message, topic, params)
+                }
+            }
+        })
+    }
+
+    publish(
+        topic: string,
+        message: string | Buffer,
+        opts?: { qos?: 0 | 1 | 2 }
+    ) {
+        this.client.publish(topic, message, { qos: opts?.qos ?? 2 })
+    }
+
+    async publishAsync(topic: string, message: string | Buffer): Promise<void> {
+        this.client.publishAsync(topic, message)
+    }
+
+    publishJson<T>(topic: string, message: T) {
+        this.publish(topic, JSON.stringify(message))
+    }
+
+    async publishJsonAsync<T>(topic: string, message: T): Promise<void> {
+        await this.publishAsync(topic, JSON.stringify(message))
+    }
+
+    unsubscribe(sub: Subscription<unknown>) {
+        const set = this.sharedMqttSubscriptions.get(sub.topic)
+        if (set) {
+            sub.emit('end')
+            set.delete(sub)
+            if (set.size === 0) {
+                this.sharedMqttSubscriptions.delete(sub.topic)
+                this.client.unsubscribe(sub.topic)
+            }
+        }
+    }
+
+    subscribe<T>(topic: string, parser: MessageParser<T>): Subscription<T> {
+        const sub = new Subscription<T>({ mqtt: this, topic, parser })
+
+        const set = this.sharedMqttSubscriptions.get(topic)
+        if (set) {
+            set.add(sub)
+        } else {
+            this.sharedMqttSubscriptions.set(topic, new Set([sub]))
+            this.client.subscribe(topic, { qos: 2, rh: 2 })
+        }
+
+        return sub
+    }
+
+    subscribeString(topic: string): Subscription<string> {
+        return this.subscribe(topic, stringParser)
+    }
+
+    subscribeJson<T>(topic: string): Subscription<T> {
+        return this.subscribe<T>(topic, jsonParser)
+    }
+
+    // TODO: Subscribe zod
+
+    subscribeBinary(topic: string): Subscription<Buffer> {
+        return this.subscribe(topic, binaryParser)
+    }
+
+    async subscribeAsync<T>(
+        topic: string,
+        parser: MessageParser<T>
+    ): Promise<Subscription<T>> {
+        const sub = new Subscription<T>({ mqtt: this, topic, parser })
+
+        const set = this.sharedMqttSubscriptions.get(topic)
+        if (set) {
+            set.add(sub)
+        } else {
+            this.sharedMqttSubscriptions.set(topic, new Set([sub]))
+            await this.client.subscribeAsync(topic)
+        }
+
+        return sub
+    }
+
+    async subscribeStringAsync(topic: string): Promise<Subscription<string>> {
+        return this.subscribeAsync(topic, stringParser)
+    }
+
+    async subscribeJsonAsync<T>(topic: string): Promise<Subscription<T>> {
+        return this.subscribeAsync<T>(topic, jsonParser)
+    }
+
+    async subscribeBinaryAsync(topic: string): Promise<Subscription<Buffer>> {
+        return this.subscribeAsync(topic, binaryParser)
+    }
+
+    static async connectAsync(opts: IClientOptions): Promise<BetterMQTT> {
+        const client = await connectAsync(opts)
+        return new BetterMQTT(client)
+    }
+
+    static connect(opts: IClientOptions): BetterMQTT {
+        const client = connect(opts)
+        return new BetterMQTT(client)
+    }
+
+    end() {
+        this.client.end()
+        this.emit('end')
+    }
+}
+
+export interface BetterMQTTMessage<T> {
+    topic: string
+    content: T
+    params: string[]
+}
+
+export interface SubscriptionEvents<T> {
+    message(message: BetterMQTTMessage<T>): void
+    end(): void
+    error(error: Error): void
+}
+
+export class Subscription<T = string> extends EventEmitter<
+    SubscriptionEvents<T>
+> {
+    private mqtt: BetterMQTT
+
+    private generator: AsyncGenerator<BetterMQTTMessage<T>>
+
+    topic: string
+
+    parser: (message: Buffer) => T
+
+    constructor(opts: {
+        mqtt: BetterMQTT
+        topic: string
+        parser: (message: Buffer) => T
+    }) {
+        super()
+
+        this.mqtt = opts.mqtt
+        this.topic = opts.topic
+        this.parser = opts.parser
+
+        const { generator, push, end, throwError } =
+            createAsyncGenerator<BetterMQTTMessage<T>>()
+
+        this.on('message', (message) => {
+            push(message)
+        })
+
+        this.on('end', () => {
+            end()
+        })
+
+        this.on('error', (error) => {
+            throwError(error)
+        })
+
+        this.generator = generator
+    }
+
+    handleMessage(
+        message: Buffer<ArrayBufferLike>,
+        topic: string,
+        params: string[]
+    ) {
+        const parsedMessage = this.parser(message)
+        this.emit('message', { topic, content: parsedMessage, params })
+    }
+
+    // The method that makes the class async iterable
+    [Symbol.asyncIterator](): AsyncGenerator<BetterMQTTMessage<T>> {
+        return this.generator
+    }
+
+    end() {
+        this.mqtt.unsubscribe(this)
+    }
+}
