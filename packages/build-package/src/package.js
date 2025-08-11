@@ -32,10 +32,10 @@ export async function writeDistPackageJson(pkg) {
         pkgExports[name === 'index' ? '.' : `./${name}`] = {
             types: {
                 import: `./${name}.d.ts`,
-                require: `./${name}.d.ts`
+                require: `./${name}.d.ts`,
             },
             require: `./${name}.js`,
-            import: `./${name}.js`
+            import: `./${name}.js`,
         }
     }
 
@@ -47,9 +47,9 @@ export async function writeDistPackageJson(pkg) {
         version: pkg.version,
         description: pkg.description,
         repository: {
-            type: "git",
-            url: "https://github.com/robot-com/oss.git",
-            directory: `packages/${dirName}`
+            type: 'git',
+            url: 'https://github.com/robot-com/oss.git',
+            directory: `packages/${dirName}`,
         },
         license: pkg.license,
         author: pkg.author,
@@ -58,7 +58,7 @@ export async function writeDistPackageJson(pkg) {
         type: pkg.type,
         exports: pkgExports,
         dependencies: pkg.dependencies,
-        peerDependencies: pkg.peerDependencies
+        peerDependencies: pkg.peerDependencies,
     }
 
     await writeFile(

@@ -30,9 +30,7 @@ export async function buildBundles(pkg) {
         sourcemap: true,
         clean: true,
         dts: true,
-        target: [
-            'node20',
-        ],
+        target: ['node20'],
         format: ['cjs', 'esm'],
     })
 }

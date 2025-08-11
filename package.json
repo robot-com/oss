@@ -3,6 +3,9 @@
     "type": "module",
     "private": true,
     "license": "MIT",
+    "scripts": {
+        "format": "pnpm dlx @biomejs/biome check --write --unsafe"
+    },
     "packageManager": "pnpm@10.12.4",
     "devDependencies": {
         "@biomejs/biome": "2.1.4"
