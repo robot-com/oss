@@ -43,3 +43,8 @@ jobs:
       - run: pnpm -r run publish --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Show npm debug log
+        if: failure()
+        run: |
+          echo "=== NPM DEBUG LOG ==="
+          cat /home/runner/.npm/_logs/* || echo "No log found"
