@@ -1,0 +1,36 @@
+name: Run Tests
+
+on: [push]
+
+jobs:
+  test:
+    env:
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_USER: ${{ secrets.MQTT_USER }}
+      MQTT_PASS: ${{ secrets.MQTT_PASS }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: touch packages/better-mqtt/.env
+      - run: pnpm -r run test
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run build
