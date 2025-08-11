@@ -15,7 +15,6 @@
         "./react": "./src/react/index.tsx"
     },
     "type": "module",
-    "repository": "https://github.com/robot-com/oss.git",
     "scripts": {
         "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
         "build": "node ../build-package",

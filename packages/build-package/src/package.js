@@ -39,11 +39,18 @@ export async function writeDistPackageJson(pkg) {
         }
     }
 
+    const dirName = pkg.name.split('/').pop()
+
     const publishablePkgJson = {
-        name: pkg['publish-name'] ?? pkg.name,
-        bin: pkg['publish-bin'] ?? pkg.bin,
+        name: pkg.name,
+        bin: pkg.bin,
         version: pkg.version,
         description: pkg.description,
+        repository: {
+            type: "git",
+            url: "https://github.com/robot-com/oss.git",
+            directory: `packages/${dirName}`
+        },
         license: pkg.license,
         author: pkg.author,
         keywords: pkg.keywords,
