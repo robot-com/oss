@@ -21,6 +21,7 @@ jobs:
         uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - run: touch packages/better-mqtt/.env
+      - run: touch packages/rpc/.env
       - run: pnpm -r run test
   build:
     runs-on: ubuntu-latest
