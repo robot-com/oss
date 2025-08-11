@@ -46,6 +46,7 @@ export async function writeDistPackageJson(pkg) {
         description: pkg.description,
         license: pkg.license,
         author: pkg.author,
+        keywords: pkg.keywords,
         module: pkg.module,
         type: pkg.type,
         exports: pkgExports,
