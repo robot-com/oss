@@ -3,7 +3,11 @@ name: Run Tests
 on: [push]
 
 jobs:
-  build:
+  test:
+    env:
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_USER: ${{ secrets.MQTT_USER }}
+      MQTT_PASS: ${{ secrets.MQTT_PASS }}
 
     runs-on: ubuntu-latest
 
