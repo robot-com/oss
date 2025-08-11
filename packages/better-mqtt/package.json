@@ -1,17 +1,24 @@
 {
     "name": "@robot.com/better-mqtt",
     "version": "0.1.0",
+    "license": "MIT",
+    "author": "Tomás Cichero <tcichero@robot.com>",
+    "private": true,
+    "keywords": [
+        "mqtt",
+        "communication",
+        "robotics",
+        "pub-sub"
+    ],
     "exports": {
         ".": "./src/index.ts",
         "./react": "./src/react/index.tsx"
     },
     "type": "module",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/robot-com/oss.git"
-    },
+    "repository": "https://github.com/robot-com/oss.git",
     "scripts": {
-        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts"
+        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
+        "build": "node ../build-package"
     },
     "dependencies": {
         "ee-ts": "^1.0.2",
@@ -19,8 +26,11 @@
     },
     "devDependencies": {
         "@types/node": "^20.19.2",
+        "@types/react": "^19.1.10",
         "tsconfig": "*",
-        "tsx": "^4.20.3"
+        "tsup": "^8.5.0",
+        "tsx": "^4.20.3",
+        "typescript": "^5.9.2"
     },
     "peerDependencies": {
         "react": "^18.3.1"

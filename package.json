@@ -1,9 +1,7 @@
 {
     "name": "robot-oss",
+    "type": "module",
     "private": true,
-    "description": "",
-    "keywords": [],
-    "author": "",
     "license": "MIT",
     "packageManager": "pnpm@10.12.4",
     "devDependencies": {
