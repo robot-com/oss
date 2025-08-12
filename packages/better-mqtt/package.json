@@ -18,7 +18,7 @@
     "scripts": {
         "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
         "build": "node ../build-package",
-        "publish": "cd dist && npm publish --access=public"
+        "publish": "node ../publish-package"
     },
     "dependencies": {
         "ee-ts": "^1.0.2",

@@ -1,0 +1,8 @@
+{
+    "name": "@robot.com/publish-package",
+    "type": "module",
+    "main": "src/index.js",
+    "devDependencies": {
+        "@types/node": "^20.19.10"
+    }
+}

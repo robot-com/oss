@@ -1,13 +1,13 @@
 {
     "name": "@robot.com/rpc",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "type": "module",
     "license": "MIT",
     "private": true,
     "scripts": {
         "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
         "build": "node ../build-package",
-        "publish": "cd dist && npm publish --access=public"
+        "publish": "node ../publish-package"
     },
     "exports": {
         "./client": "./src/client/index.ts",
