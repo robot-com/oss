@@ -8,6 +8,8 @@ jobs:
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_USER: ${{ secrets.MQTT_USER }}
       MQTT_PASS: ${{ secrets.MQTT_PASS }}
+      NATS_URL: ${{ secrets.NATS_URL }}
+      NATS_TOKEN: ${{ secrets.NATS_TOKEN }}
 
     runs-on: ubuntu-latest
 

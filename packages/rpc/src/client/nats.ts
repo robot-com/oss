@@ -10,6 +10,23 @@ export type RPCClientOptions = {
     headers?: Record<string, string>
 }
 
+export type CallOptions<P, I> = {
+    signal?: AbortSignal
+    timeout?: number
+} & (P extends null | undefined
+    ? {
+        params?: P
+    }
+    : {
+        params: P
+    }) &
+    (I extends null | undefined
+        ? {
+            input?: I
+        }
+        : {
+            input: I
+        })
 export class RPCClientNATS implements RPCClient {
     opts: RPCClientOptions
 
@@ -19,12 +36,10 @@ export class RPCClientNATS implements RPCClient {
 
     call<T extends Procedure>(
         procedure: T,
-        opts: {
-            params: ProcedureParams<T['paramsSchema']>
-            input: ProcedureParams<T['inputSchema']>
-            signal?: AbortSignal
-            timeout?: number
-        }
+        opts: CallOptions<
+            ProcedureParams<T['paramsSchema']>,
+            ProcedureParams<T['inputSchema']>
+        >
     ): Promise<ProcedureOutput<T['outputSchema']>> {
         return new Promise<ProcedureOutput<T['outputSchema']>>(
             (resolve, reject) => {
@@ -62,8 +77,8 @@ export class RPCClientNATS implements RPCClient {
 
                 const payload = {
                     reply: r,
-                    params: opts.params,
-                    input: opts.input,
+                    params: 'params' in opts ? opts.params : null,
+                    input: 'input' in opts ? opts.input : null,
                 }
 
                 const publishSubject =

@@ -13,10 +13,10 @@ test('api', async () => {
     const api = {
         demo: defineProcedure({
             path: 'demo.$id',
-            method: 'GET',
-            inputSchema: z.null(),
+            method: 'POST',
             outputSchema: z.object({ name: z.string() }),
             paramsSchema: z.object({ id: z.string() }),
+            inputSchema: z.object({ filter: z.string() }),
         }),
     }
 
@@ -35,7 +35,7 @@ test('api', async () => {
         }
     })
 
-    const match = registry.match('GET', 'demo/123')
+    const match = registry.match('POST', 'demo/123')
 
     assert(match !== undefined)
     assert(match.params.id === '123')
@@ -100,10 +100,15 @@ test('rpc full', async () => {
     const api = {
         demo: defineProcedure({
             path: 'demo.$id',
-            method: 'GET',
+            method: 'POST',
             inputSchema: z.object({ filter: z.string() }),
             outputSchema: z.object({ name: z.string() }),
             paramsSchema: z.object({ id: z.string() }),
+        }),
+        get: defineProcedure({
+            method: 'GET',
+            path: 'get.demo',
+            outputSchema: z.object({ name: z.string() }),
         }),
     }
 
@@ -120,9 +125,13 @@ test('rpc full', async () => {
                 req,
             }
         },
-    }).impl(api.demo, async () => {
-        return { data: { name: 'John Doe' } }
     })
+        .impl(api.demo, async () => {
+            return { data: { name: 'John Doe' } }
+        })
+        .impl(api.get, async () => {
+            return { data: { name: 'Jane Doe' } }
+        })
 
     const server = await startRpcNatsServer({
         nats: ncsrv,
@@ -151,6 +160,10 @@ test('rpc full', async () => {
     })
 
     assert.equal(res.name, 'John Doe')
+
+    const res2 = await client.call(api.get, {})
+
+    assert.equal(res2.name, 'Jane Doe')
 
     await server.stop()
     await ncclient.drain()
