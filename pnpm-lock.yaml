@@ -47,6 +47,12 @@ importers:
         specifier: ^20.19.10
         version: 20.19.10
 
+  packages/publish-package:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.10
+        version: 20.19.10
+
   packages/rpc:
     dependencies:
       '@nats-io/jetstream':
