@@ -13,10 +13,11 @@ const remotePkg = await fetch(`https://registry.npmjs.org/${pkg.name}/latest`).t
 const remoteVersion = remotePkg.version
 
 if (localVersion === remoteVersion) {
-    console.info('Version already exists, skipping publish')
+    console.info('✅ Same version', remoteVersion, '===', localVersion)
+
     process.exit(0)
 } else {
-    console.info('Version mismatch, publishing')
+    console.info('🆕 New version', remoteVersion, '-->', localVersion)
     const moreArgs = process.argv.slice(2)
     const p = spawn('npm', ['publish', '--access=public', ...moreArgs], { stdio: 'inherit', cwd: path.resolve('./dist') })
 
