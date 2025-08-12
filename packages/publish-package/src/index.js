@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 
 /**
  * The parsed contents of the root `package.json` file.
@@ -17,7 +18,7 @@ if (localVersion === remoteVersion) {
 } else {
     console.info('Version mismatch, publishing')
     const moreArgs = process.argv.slice(2)
-    const p = spawn('npm', ['publish', '--access=public', ...moreArgs], { stdio: 'inherit' })
+    const p = spawn('npm', ['publish', '--access=public', ...moreArgs], { stdio: 'inherit', cwd: path.resolve('./dist') })
 
     const { promise, resolve, reject } = Promise.withResolvers()
 
