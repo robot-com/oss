@@ -8,3 +8,7 @@
 
 - Added keywords
 - Added changelog
+
+## 0.1.2
+
+- Updated README.md
