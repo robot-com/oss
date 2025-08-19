@@ -12,6 +12,9 @@ test('fetch empty schema', async () => {
     assert.equal(schema.views.length, 0)
     assert.equal(schema.schema, 'public')
     assert.ok(schema.generated_at)
+    assert.ok(Array.isArray(schema.tables))
+    assert.ok(Array.isArray(schema.enums))
+    assert.ok(Array.isArray(schema.views))
 })
 
 test('fetch table with various column types and properties', async () => {
@@ -22,6 +25,7 @@ test('fetch table with various column types and properties', async () => {
             id INT NOT NULL,
             name TEXT DEFAULT 'anonymous',
             price NUMERIC(10, 2),
+            code VARCHAR(10),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
     `)
@@ -30,7 +34,7 @@ test('fetch table with various column types and properties', async () => {
     const table = schema.tables[0]
     assert.ok(table, 'Table should exist')
 
-    assert.equal(table.columns.length, 4)
+    assert.equal(table.columns.length, 5)
 
     const idCol = table.columns.find((c) => c.name === 'id')
     assert.ok(idCol)
@@ -49,6 +53,11 @@ test('fetch table with various column types and properties', async () => {
     assert.equal(priceCol.data_type, 'numeric')
     assert.equal(priceCol.numeric_precision, 10)
     assert.equal(priceCol.numeric_scale, 2)
+
+    const codeCol = table.columns.find((c) => c.name === 'code')
+    assert.ok(codeCol)
+    assert.equal(codeCol.data_type, 'character varying')
+    assert.equal(codeCol.max_length, 10)
 
     const createdCol = table.columns.find((c) => c.name === 'created_at')
     assert.ok(createdCol)
@@ -123,6 +132,7 @@ test('fetch table with primary key and check constraints', async () => {
     assert.ok(pkIndex)
     assert.equal(pkIndex.is_constraint_index, true)
     assert.equal(pkIndex.is_unique, true)
+    assert.equal(pkIndex.is_valid, true)
 })
 
 test('fetch table with composite primary key', async () => {
@@ -179,6 +189,7 @@ test('fetch table with foreign key constraints', async () => {
     assert.deepEqual(fk.foreign_columns, ['id'])
     assert.equal(fk.on_delete, 'CASCADE')
     assert.equal(fk.on_update, 'RESTRICT')
+    assert.equal(fk.match_option, 'SIMPLE')
 })
 
 test('fetch advanced indexes (composite, order, partial)', async () => {
@@ -210,8 +221,10 @@ test('fetch advanced indexes (composite, order, partial)', async () => {
     assert.equal(compositeIndex.columns.length, 2)
     assert.equal(compositeIndex.columns[0].name, 'name')
     assert.equal(compositeIndex.columns[0].sort_order, 'ASC')
+    assert.equal(compositeIndex.columns[0].nulls_order, 'NULLS LAST')
     assert.equal(compositeIndex.columns[1].name, 'category')
     assert.equal(compositeIndex.columns[1].sort_order, 'DESC')
+    assert.equal(compositeIndex.columns[1].nulls_order, 'NULLS FIRST') // DESC default
     assert.equal(compositeIndex.predicate, null)
 
     const partialIndex = table.indexes.find((i) => i.name === 'idx_active')
@@ -241,6 +254,15 @@ test('fetch enums and views', async () => {
     const happyView = schema.views[0]
     assert.equal(happyView.name, 'happy_people')
     assert.ok(happyView.definition.includes("current_mood = 'happy'::mood"))
+
+    const personTable = schema.tables.find((t) => t.name === 'person')
+    assert.ok(personTable)
+    const moodColumn = personTable.columns.find(
+        (c) => c.name === 'current_mood'
+    )
+    assert.ok(moodColumn)
+    assert.equal(moodColumn.data_type, 'USER-DEFINED')
+    assert.equal(moodColumn.udt_name, 'mood')
 })
 
 test('fetch triggers', async () => {
@@ -280,6 +302,7 @@ test('fetch triggers', async () => {
     assert.equal(trigger.event, 'UPDATE')
     assert.equal(trigger.level, 'ROW')
     assert.equal(trigger.function_name, 'update_updated_at_column')
+    assert.equal(trigger.function_schema, 'public')
 })
 
 test('fetch comments/descriptions for all object types', async () => {
@@ -288,7 +311,9 @@ test('fetch comments/descriptions for all object types', async () => {
     await client.query("CREATE TYPE status AS ENUM ('active', 'inactive')")
     await client.query("COMMENT ON TYPE status IS 'The status of an entity.'")
 
-    await client.query('CREATE TABLE test (id INT, name TEXT)')
+    await client.query(
+        'CREATE TABLE test (id INT PRIMARY KEY, name TEXT, parent_id INT)'
+    )
     await client.query("COMMENT ON TABLE test IS 'This is a test table.'")
     await client.query(
         "COMMENT ON COLUMN test.name IS 'The name of the entity.'"
@@ -299,6 +324,13 @@ test('fetch comments/descriptions for all object types', async () => {
     )
     await client.query(
         "COMMENT ON CONSTRAINT name_not_empty ON test IS 'Name cannot be empty.'"
+    )
+
+    await client.query(
+        'ALTER TABLE test ADD CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES test(id)'
+    )
+    await client.query(
+        "COMMENT ON CONSTRAINT fk_parent ON test IS 'Self-referencing parent.' "
     )
 
     await client.query('CREATE INDEX idx_test_name ON test (name)')
@@ -330,6 +362,10 @@ test('fetch comments/descriptions for all object types', async () => {
     assert.equal(
         table.indexes.find((i) => i.name === 'idx_test_name')?.description,
         'Index for fast name lookup.'
+    )
+    assert.equal(
+        table.foreign_keys.find((fk) => fk.name === 'fk_parent')?.description,
+        'Self-referencing parent.'
     )
 })
 
@@ -423,4 +459,315 @@ test('kitchen sink: fetch schema with multiple interconnected features', async (
     assert.ok(authorIndex)
     assert.equal(authorIndex.columns.length, 2)
     assert.equal(authorIndex.columns[1].sort_order, 'DESC')
+})
+
+test('fetch table with array column type', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id INT, tags TEXT[])')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const tagsCol = table.columns.find((c) => c.name === 'tags')
+    assert.ok(tagsCol)
+    assert.equal(tagsCol.data_type, 'ARRAY')
+    assert.equal(tagsCol.udt_name, '_text')
+})
+
+test('fetch table with JSON and JSONB column types', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (metadata JSON, config JSONB)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const metaCol = table.columns.find((c) => c.name === 'metadata')
+    const configCol = table.columns.find((c) => c.name === 'config')
+    assert.ok(metaCol)
+    assert.ok(configCol)
+    assert.equal(metaCol.data_type, 'json')
+    assert.equal(configCol.data_type, 'jsonb')
+})
+
+test('fetch table with various other data types (UUID, BYTEA, INET)', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id UUID, data BYTEA, last_ip INET)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    assert.equal(table.columns.find((c) => c.name === 'id')?.data_type, 'uuid')
+    assert.equal(
+        table.columns.find((c) => c.name === 'data')?.data_type,
+        'bytea'
+    )
+    assert.equal(
+        table.columns.find((c) => c.name === 'last_ip')?.data_type,
+        'inet'
+    )
+})
+
+test('fetch table with a simple UNIQUE constraint', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE users (id INT, email TEXT UNIQUE)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    assert.equal(table.constraints.length, 1)
+    const uniqueConstraint = table.constraints[0]
+    assert.equal(uniqueConstraint.type, 'UNIQUE')
+    assert.equal(uniqueConstraint.definition, 'UNIQUE (email)')
+    assert.equal(table.indexes.length, 1)
+    assert.equal(table.indexes[0].is_constraint_index, true)
+})
+
+test('fetch table with a composite UNIQUE constraint', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (a INT, b INT, UNIQUE (a, b))')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const uniqueConstraint = table.constraints[0]
+    assert.equal(uniqueConstraint.type, 'UNIQUE')
+    assert.equal(uniqueConstraint.definition, 'UNIQUE (a, b)')
+    const uniqueIndex = table.indexes[0]
+    assert.equal(uniqueIndex.columns.length, 2)
+    assert.equal(uniqueIndex.columns[0].name, 'a')
+    assert.equal(uniqueIndex.columns[1].name, 'b')
+})
+
+test('fetch table with a UNIQUE constraint with NULLS NOT DISTINCT', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query(
+        'CREATE TABLE test (name TEXT UNIQUE NULLS NOT DISTINCT)'
+    )
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const uniqueConstraint = table.constraints[0]
+    assert.equal(uniqueConstraint.type, 'UNIQUE')
+    assert.equal(uniqueConstraint.nulls_not_distinct, true)
+    const uniqueIndex = table.indexes[0]
+    assert.equal(uniqueIndex.nulls_not_distinct, true)
+})
+
+test('fetch index with custom nulls ordering (NULLS FIRST)', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (name TEXT)')
+    await client.query('CREATE INDEX idx_name ON test (name NULLS FIRST)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const index = table.indexes[0]
+    assert.equal(index.columns[0].nulls_order, 'NULLS FIRST')
+})
+
+test('fetch index on an expression', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE users (email TEXT)')
+    await client.query('CREATE INDEX idx_lower_email ON users (lower(email))')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const index = table.indexes[0]
+    assert.equal(
+        index.definition,
+        'CREATE INDEX idx_lower_email ON public.users USING btree (lower(email))'
+    )
+    assert.equal(index.columns.length, 0) // pg_attribute doesn't link expressions
+})
+
+test('fetch GIN index', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (data JSONB)')
+    await client.query('CREATE INDEX idx_data_gin ON test USING GIN (data)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const index = table.indexes[0]
+    assert.equal(index.name, 'idx_data_gin')
+    assert.equal(index.index_type, 'gin')
+})
+
+test('fetch composite foreign key', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query(`
+        CREATE TABLE parents (
+            id1 INT,
+            id2 INT,
+            PRIMARY KEY (id1, id2)
+        )
+    `)
+    await client.query(`
+        CREATE TABLE children (
+            child_id INT PRIMARY KEY,
+            parent_id1 INT,
+            parent_id2 INT,
+            FOREIGN KEY (parent_id1, parent_id2) REFERENCES parents(id1, id2)
+        )
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const childrenTable = schema.tables.find((t) => t.name === 'children')
+    assert.ok(childrenTable)
+    const fk = childrenTable.foreign_keys[0]
+    assert.deepEqual(fk.columns, ['parent_id1', 'parent_id2'])
+    assert.deepEqual(fk.foreign_columns, ['id1', 'id2'])
+})
+
+test('fetch foreign key with ON DELETE SET NULL and ON UPDATE SET DEFAULT', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query(
+        "CREATE TABLE users (id INT PRIMARY KEY, name TEXT DEFAULT 'guest')"
+    )
+    await client.query(`
+        CREATE TABLE posts (
+            id INT PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE SET NULL ON UPDATE SET DEFAULT
+        )
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const postsTable = schema.tables.find((t) => t.name === 'posts')
+    assert.ok(postsTable)
+    const fk = postsTable.foreign_keys[0]
+    assert.equal(fk.on_delete, 'SET NULL')
+    assert.equal(fk.on_update, 'SET DEFAULT')
+})
+
+test('fetch trigger for multiple events (INSERT OR UPDATE)', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id INT, updated_at TIMESTAMPTZ)')
+    await client.query(`
+        CREATE OR REPLACE FUNCTION set_updated_at_func() RETURNS TRIGGER AS $$
+        BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+        $$ LANGUAGE plpgsql;
+    `)
+    await client.query(`
+        CREATE TRIGGER test_trigger
+        BEFORE INSERT OR UPDATE ON test
+        FOR EACH ROW EXECUTE FUNCTION set_updated_at_func();
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const trigger = table.triggers[0]
+    assert.equal(trigger.event, 'INSERT OR UPDATE')
+})
+
+test('fetch statement-level trigger', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id INT)')
+    await client.query(`
+        CREATE OR REPLACE FUNCTION statement_func() RETURNS TRIGGER AS $$
+        BEGIN RAISE NOTICE 'Statement executed'; RETURN NULL; END;
+        $$ LANGUAGE plpgsql;
+    `)
+    await client.query(`
+        CREATE TRIGGER test_trigger
+        AFTER TRUNCATE ON test
+        FOR EACH STATEMENT EXECUTE FUNCTION statement_func();
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    const trigger = table.triggers[0]
+    assert.equal(trigger.level, 'STATEMENT')
+    assert.equal(trigger.event, 'TRUNCATE')
+})
+
+test('fetch INSTEAD OF trigger on a view', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id INT)')
+    await client.query('CREATE VIEW test_view AS SELECT * FROM test')
+    await client.query(`
+        CREATE OR REPLACE FUNCTION instead_of_func() RETURNS TRIGGER AS $$
+        BEGIN RETURN NEW; END;
+        $$ LANGUAGE plpgsql;
+    `)
+    await client.query(`
+        CREATE TRIGGER test_view_trigger
+        INSTEAD OF INSERT ON test_view
+        FOR EACH ROW EXECUTE FUNCTION instead_of_func();
+    `)
+    // NOTE: The current query only fetches triggers on tables (relkind = 'r').
+    // This test confirms that triggers on views are correctly ignored.
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables.find((t) => t.name === 'test')
+    assert.ok(table)
+    assert.equal(table.triggers.length, 0)
+})
+
+test('ensure objects from other schemas are ignored', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE SCHEMA private')
+    await client.query('CREATE TABLE private.secret (id INT)')
+    await client.query("CREATE TYPE private.secret_enum AS ENUM ('a', 'b')")
+    await client.query('CREATE VIEW private.secret_view AS SELECT 1')
+    await client.query('CREATE TABLE public.data (id INT)')
+
+    const schema = await fetchSchemaPgLite(client)
+    assert.equal(schema.tables.length, 1)
+    assert.equal(schema.tables[0].name, 'data')
+    assert.equal(schema.enums.length, 0)
+    assert.equal(schema.views.length, 0)
+})
+
+test('verify alphabetical ordering of tables in the final output', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE z_table (id INT)')
+    await client.query('CREATE TABLE a_table (id INT)')
+    await client.query('CREATE TABLE m_table (id INT)')
+
+    const schema = await fetchSchemaPgLite(client)
+    assert.equal(schema.tables.length, 3)
+    assert.equal(schema.tables[0].name, 'a_table')
+    assert.equal(schema.tables[1].name, 'm_table')
+    assert.equal(schema.tables[2].name, 'z_table')
+})
+
+test('fetch table with no constraints or indexes', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE simple (id INT, name TEXT)')
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    assert.ok(table)
+    assert.equal(table.constraints.length, 0)
+    assert.equal(table.indexes.length, 0)
+    assert.equal(table.foreign_keys.length, 0)
+    assert.equal(table.triggers.length, 0)
+})
+
+test('fetch schema with no views or enums but with tables', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE test (id INT)')
+    const schema = await fetchSchemaPgLite(client)
+    assert.equal(schema.tables.length, 1)
+    assert.equal(schema.enums.length, 0)
+    assert.equal(schema.views.length, 0)
+})
+
+test('fetch foreign key with NO ACTION referential action', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query('CREATE TABLE users (id INT PRIMARY KEY)')
+    await client.query(`
+        CREATE TABLE posts (
+            id INT PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE NO ACTION ON UPDATE NO ACTION
+        )
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const postsTable = schema.tables.find((t) => t.name === 'posts')
+    assert.ok(postsTable)
+    const fk = postsTable.foreign_keys[0]
+    assert.equal(fk.on_delete, 'NO ACTION')
+    assert.equal(fk.on_update, 'NO ACTION')
+})
+
+test('fetch table with multiple check constraints', async () => {
+    const client = (await createLocalDatabase({})).$client
+    await client.query(`
+        CREATE TABLE products (
+            price INT CHECK (price > 0),
+            discount INT,
+            CONSTRAINT discount_check CHECK (discount < price)
+        )
+    `)
+    const schema = await fetchSchemaPgLite(client)
+    const table = schema.tables[0]
+    assert.equal(table.constraints.length, 2)
+    const priceCheck = table.constraints.find((c) =>
+        c.definition.includes('price')
+    )
+    const discountCheck = table.constraints.find((c) =>
+        c.definition.includes('discount')
+    )
+    assert.ok(priceCheck)
+    assert.ok(discountCheck)
+    assert.equal(priceCheck.type, 'CHECK')
+    assert.equal(discountCheck.type, 'CHECK')
 })
