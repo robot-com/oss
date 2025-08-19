@@ -44,6 +44,7 @@ export async function writeDistPackageJson(pkg) {
     const publishablePkgJson = {
         name: pkg.name,
         bin: pkg.bin,
+        private: pkg['no-publish'],
         version: pkg.version,
         description: pkg.description,
         repository: {
