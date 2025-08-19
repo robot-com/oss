@@ -4,9 +4,18 @@ import path from 'node:path'
 
 /**
  * The parsed contents of the root `package.json` file.
- * @type {Record<string, any>}
+ * @type {Record<string, any> | null}
  */
-const pkg = JSON.parse(await readFile('./package.json', 'utf-8'))
+const pkg = JSON.parse(await readFile('./dist/package.json', 'utf-8')).catch(() => null)
+
+if (!pkg) {
+    throw new Error('No package.json found. Please build your package first.')
+}
+
+if (pkg.private) {
+    console.warn('Package is private. Skipping publish.')
+    process.exit(0)
+}
 
 const localVersion = pkg.version
 const remotePkg = await fetch(`https://registry.npmjs.org/${pkg.name}/latest`).then(res => res.json())
