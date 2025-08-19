@@ -1,0 +1,21 @@
+{
+    "name": "@robot.com/drizzle-pg-tools",
+    "version": "0.0.1",
+    "type": "module",
+    "license": "MIT",
+    "private": true,
+    "no-publish": true,
+    "scripts": {
+        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
+        "build": "node ../build-package",
+        "publish": "node ../publish-package"
+    },
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "tsx": "^4.20.3",
+        "typescript": "^5.9.2"
+    }
+}
