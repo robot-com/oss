@@ -126,6 +126,7 @@ test('fetch table with primary key and check constraints', async () => {
     assert.ok(check)
     assert.equal(check.name, 'price_check')
     assert.equal(check.definition, 'CHECK ((price > 0))')
+    assert.equal(check.check_predicate, '(price > 0)')
 
     // The PK should also create a unique index
     const pkIndex = table.indexes.find((i) => i.name === 'products_pkey')

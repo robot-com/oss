@@ -82,7 +82,7 @@ export const extractSchemaSQLQuery = `WITH
       c.table_name
   ),
   -- 3b. CONSTRAINTS: Gather PRIMARY KEY, UNIQUE, and CHECK constraints with their descriptions.
-  table_constraints AS (
+    table_constraints AS (
     SELECT
       rel.relname AS table_name,
       jsonb_agg(
@@ -99,6 +99,11 @@ export const extractSchemaSQLQuery = `WITH
           END,
           'definition',
           pg_get_constraintdef(con.oid),
+          'check_predicate',
+          CASE
+            WHEN con.contype = 'c' THEN pg_get_expr(con.conbin, con.conrelid)
+            ELSE null
+          END,
           'nulls_not_distinct',
           idx.indnullsnotdistinct
         )
@@ -110,7 +115,7 @@ export const extractSchemaSQLQuery = `WITH
       LEFT JOIN pg_catalog.pg_index idx ON idx.indexrelid = con.conindid
     WHERE
       nsp.nspname = 'public'
-      AND con.contype IN ('p', 'u', 'c') -- Exclude Foreign Keys, handled separately
+      AND con.contype IN ('p', 'u', 'c')
     GROUP BY
       rel.relname
   ),
