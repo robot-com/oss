@@ -89,7 +89,7 @@ export interface IndexDefinition {
     /** Indicates if the index enforces a uniqueness constraint. */
     is_unique: boolean
     /** Indicates if the index does not consider null values as distinct. */
-    nulls_not_distinct: boolean
+    nulls_not_distinct: boolean | null
     /** Indicates if the index is currently valid and usable by the query planner. */
     is_valid: boolean
     /** The index access method (e.g., 'btree', 'gist', 'gin'). */
