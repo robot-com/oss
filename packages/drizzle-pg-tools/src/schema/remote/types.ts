@@ -217,7 +217,7 @@ export interface TableDefinition {
 /**
  * The root type for the entire public schema JSON object.
  */
-export interface PublicSchema {
+export interface RemoteSchema {
     /** The name of the schema being described. */
     schema: string
     /** The ISO 8601 timestamp of when the schema was generated. */

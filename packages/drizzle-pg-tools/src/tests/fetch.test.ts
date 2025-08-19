@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createLocalDatabase } from '../db'
-import { fetchSchemaPgLite } from '../schema/fetch'
+import { fetchSchemaPgLite } from '../schema/remote/fetch'
 
 test('fetch empty schema', async () => {
     const client = (await createLocalDatabase({})).$client

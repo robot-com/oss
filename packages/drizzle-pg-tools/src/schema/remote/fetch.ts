@@ -1,7 +1,7 @@
 import type { PGlite } from '@electric-sql/pglite'
 import type { Sql } from 'postgres'
 import { extractSchemaSQLQuery } from './query'
-import type { PublicSchema } from './types'
+import type { RemoteSchema } from './types'
 
 export type QuerySchemaOptions = {
     ignore?: {
@@ -15,10 +15,10 @@ export type QuerySchemaOptions = {
 export async function fetchSchemaPgLite(
     client: PGlite,
     options: QuerySchemaOptions = {}
-): Promise<PublicSchema> {
+): Promise<RemoteSchema> {
     return removeIgnoredElements(
         await client
-            .query<{ public_schema_json: PublicSchema }>(extractSchemaSQLQuery)
+            .query<{ public_schema_json: RemoteSchema }>(extractSchemaSQLQuery)
             .then((r) => r.rows[0]!.public_schema_json),
         options
     )
@@ -30,7 +30,7 @@ export async function fetchSchemaPostgresSQL(
 ) {
     return removeIgnoredElements(
         await client
-            .unsafe<{ public_schema_json: PublicSchema }[]>(
+            .unsafe<{ public_schema_json: RemoteSchema }[]>(
                 extractSchemaSQLQuery
             )
             .then((r) => r[0]!.public_schema_json),
@@ -39,9 +39,9 @@ export async function fetchSchemaPostgresSQL(
 }
 
 function removeIgnoredElements(
-    schema: PublicSchema,
+    schema: RemoteSchema,
     options: QuerySchemaOptions
-): PublicSchema {
+): RemoteSchema {
     if (options.ignore?.views) {
         schema.views = schema.views.filter(
             (v) => !options.ignore!.views!.includes(v.name)
