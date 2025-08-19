@@ -72,6 +72,8 @@ export interface IndexDefinition {
     is_constraint_index: boolean
     /** Indicates if the index enforces a uniqueness constraint. */
     is_unique: boolean
+    /** Indicates if the index does not consider null values as distinct. */
+    nulls_not_distinct: boolean
     /** Indicates if the index is currently valid and usable by the query planner. */
     is_valid: boolean
     /** The index access method (e.g., 'btree', 'gist', 'gin'). */
@@ -116,6 +118,8 @@ export interface ConstraintDefinition {
     type: ConstraintType
     /** The SQL definition of the constraint. */
     definition: string
+    /** Indicates if the constraint does not consider null values as distinct. */
+    nulls_not_distinct: boolean
 }
 
 /**

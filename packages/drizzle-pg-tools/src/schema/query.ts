@@ -73,13 +73,16 @@ export const extractSchemaSQLQuery = `WITH
             WHEN 'c' THEN 'CHECK'
           END,
           'definition',
-          pg_get_constraintdef(con.oid)
+          pg_get_constraintdef(con.oid),
+          'nulls_not_distinct',
+          idx.indnullsnotdistinct
         )
       ) AS constraints
     FROM
       pg_catalog.pg_constraint con
       JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+      LEFT JOIN pg_catalog.pg_index idx ON idx.indexrelid = con.conindid
     WHERE
       nsp.nspname = 'public'
       AND con.contype IN ('p', 'u', 'c') -- Exclude Foreign Keys, handled separately
@@ -98,6 +101,8 @@ export const extractSchemaSQLQuery = `WITH
           pg_get_indexdef(ic.oid),
           'is_unique',
           i.indisunique,
+          'nulls_not_distinct',
+          i.indnullsnotdistinct,
           'is_constraint_index',
           con.conindid IS NOT NULL,
           'is_valid',

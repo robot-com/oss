@@ -49,10 +49,36 @@ test('fetch unique constraint', async () => {
     assert.equal(schema.tables[0].constraints.length, 1)
     assert.equal(schema.tables[0].constraints[0].name, 'test_id_key')
     assert.equal(schema.tables[0].constraints[0].type, 'UNIQUE')
+    assert.equal(schema.tables[0].constraints[0].nulls_not_distinct, false)
 
     // Indexes
     assert.equal(schema.tables[0].indexes.length, 1)
     assert.equal(schema.tables[0].indexes[0].name, 'test_id_key')
     assert.equal(schema.tables[0].indexes[0].is_constraint_index, true)
     assert.equal(schema.tables[0].indexes[0].is_unique, true)
+    assert.equal(schema.tables[0].indexes[0].nulls_not_distinct, false)
+})
+
+test('fetch unique constraint null not distinct', async () => {
+    const client = (await createLocalDatabase({})).$client
+
+    await client.query(
+        'create table test (id int, name text, unique nulls not distinct (id)) '
+    )
+
+    const schema = await fetchSchemaPgLite(client)
+
+    // Constraints
+    assert.equal(schema.tables.length, 1)
+    assert.equal(schema.tables[0].constraints.length, 1)
+    assert.equal(schema.tables[0].constraints[0].name, 'test_id_key')
+    assert.equal(schema.tables[0].constraints[0].type, 'UNIQUE')
+    assert.equal(schema.tables[0].constraints[0].nulls_not_distinct, true)
+
+    // Indexes
+    assert.equal(schema.tables[0].indexes.length, 1)
+    assert.equal(schema.tables[0].indexes[0].name, 'test_id_key')
+    assert.equal(schema.tables[0].indexes[0].is_constraint_index, true)
+    assert.equal(schema.tables[0].indexes[0].is_unique, true)
+    assert.equal(schema.tables[0].indexes[0].nulls_not_distinct, true)
 })
