@@ -29,11 +29,23 @@ export type SortOrder = 'ASC' | 'DESC'
 export type NullsOrder = 'NULLS FIRST' | 'NULLS LAST'
 
 /**
+ * Defines the timing of a trigger's execution.
+ */
+export type TriggerTiming = 'BEFORE' | 'AFTER' | 'INSTEAD OF'
+
+/**
+ * Defines the execution level of a trigger.
+ */
+export type TriggerLevel = 'ROW' | 'STATEMENT'
+
+/**
  * Represents a user-defined enum type in the database schema.
  */
 export interface EnumDefinition {
     /** The name of the enum type. */
     name: string
+    /** The comment or description for the enum type. */
+    description: string | null
     /** An ordered array of the possible values for the enum. */
     values: string[]
 }
@@ -44,6 +56,8 @@ export interface EnumDefinition {
 export interface ViewDefinition {
     /** The name of the view. */
     name: string
+    /** The comment or description for the view. */
+    description: string | null
     /** The complete SQL `CREATE VIEW` definition string. */
     definition: string
 }
@@ -66,6 +80,8 @@ export interface IndexColumn {
 export interface IndexDefinition {
     /** The name of the index. */
     name: string
+    /** The comment or description for the index. */
+    description: string | null
     /** The complete SQL `CREATE INDEX` definition string. */
     definition: string
     /** Indicates if the index is created by a constraint. */
@@ -90,6 +106,8 @@ export interface IndexDefinition {
 export interface ColumnDefinition {
     /** The name of the column. */
     name: string
+    /** The comment or description for the column. */
+    description: string | null
     /** The 1-based ordinal position of the column in the table. */
     position: number
     /** The data type of the column (e.g., 'integer', 'character varying'). */
@@ -98,6 +116,14 @@ export interface ColumnDefinition {
     is_nullable: boolean
     /** The default value expression for the column, if any. */
     default: string | null
+    /** Indicates if the column is a generated column. */
+    is_generated: boolean
+    /** The expression used to generate the column's value. */
+    generation_expression: string | null
+    /** Indicates if the column is an identity column. */
+    is_identity: boolean
+    /** The generation type for an identity column. */
+    identity_generation: 'ALWAYS' | 'BY DEFAULT' | null
     /** The maximum length for character types, if applicable. */
     max_length: number | null
     /** The precision for numeric types, if applicable. */
@@ -114,6 +140,8 @@ export interface ColumnDefinition {
 export interface ConstraintDefinition {
     /** The name of the constraint. */
     name: string
+    /** The comment or description for the constraint. */
+    description: string | null
     /** The type of the constraint. */
     type: ConstraintType
     /** The SQL definition of the constraint. */
@@ -128,6 +156,8 @@ export interface ConstraintDefinition {
 export interface ForeignKeyDefinition {
     /** The name of the foreign key constraint. */
     name: string
+    /** The comment or description for the foreign key. */
+    description: string | null
     /** The column(s) in the local table that make up the foreign key. */
     columns: string[]
     /** The table that the foreign key references. */
@@ -143,11 +173,35 @@ export interface ForeignKeyDefinition {
 }
 
 /**
+ * Represents a trigger on a table.
+ */
+export interface TriggerDefinition {
+    /** The name of the trigger. */
+    name: string
+    /** The comment or description for the trigger. */
+    description: string | null
+    /** When the trigger fires relative to the event. */
+    timing: TriggerTiming
+    /** A string representing the event(s) that fire the trigger (e.g., 'INSERT OR UPDATE'). */
+    event: string
+    /** The level at which the trigger operates. */
+    level: TriggerLevel
+    /** The schema of the function executed by the trigger. */
+    function_schema: string
+    /** The name of the function executed by the trigger. */
+    function_name: string
+    /** The full `CREATE TRIGGER` definition string. */
+    definition: string
+}
+
+/**
  * Represents a single database table, including its columns, constraints, indexes, and foreign keys.
  */
 export interface TableDefinition {
     /** The name of the table. */
     name: string
+    /** The comment or description for the table. */
+    description: string | null
     /** An array of the table's columns. */
     columns: ColumnDefinition[]
     /** An array of the table's constraints (Primary Key, Unique, Check). */
@@ -156,6 +210,8 @@ export interface TableDefinition {
     indexes: IndexDefinition[]
     /** An array of foreign keys originating from this table. */
     foreign_keys: ForeignKeyDefinition[]
+    /** An array of triggers defined on this table. */
+    triggers: TriggerDefinition[]
 }
 
 /**

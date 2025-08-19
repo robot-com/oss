@@ -1,8 +1,9 @@
 export const extractSchemaSQLQuery = `WITH
-  -- 1. ENUMS: Gather all user-defined enum types and their possible values.
+  -- 1. ENUMS: Gather all user-defined enum types, their values, and descriptions.
   enums AS (
     SELECT
       t.typname AS enum_name,
+      obj_description(t.oid, 'pg_type') AS description,
       jsonb_agg(e.enumlabel ORDER BY e.enumsortorder) AS "values"
     FROM pg_type t
     JOIN pg_enum e ON t.oid = e.enumtypid
@@ -10,20 +11,25 @@ export const extractSchemaSQLQuery = `WITH
     WHERE
       n.nspname = 'public'
     GROUP BY
-      t.typname
+      t.typname,
+      t.oid
   ),
-  -- 2. VIEWS: Gather all views and their definitions.
+  -- 2. VIEWS: Gather all views, their definitions, and descriptions.
   views AS (
     SELECT
       v.table_name AS view_name,
-      v.view_definition AS definition
+      v.view_definition AS definition,
+      obj_description(c.oid, 'pg_class') AS description
     FROM
       information_schema.views v
+      JOIN pg_catalog.pg_class c ON c.relname = v.table_name
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE
       v.table_schema = 'public'
+      AND n.nspname = 'public'
   ),
   -- 3. TABLE DETAILS: This section is broken into multiple CTEs for clarity.
-  -- 3a. COLUMNS: Gather detailed information for each column in each table.
+  -- 3a. COLUMNS: Gather detailed information for each column, including descriptions and identity/generated status.
   table_columns AS (
     SELECT
       c.table_name,
@@ -31,6 +37,8 @@ export const extractSchemaSQLQuery = `WITH
         jsonb_build_object(
           'name',
           c.column_name,
+          'description',
+          d.description,
           'position',
           c.ordinal_position,
           'data_type',
@@ -39,6 +47,14 @@ export const extractSchemaSQLQuery = `WITH
           CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END,
           'default',
           c.column_default,
+          'is_generated',
+          c.is_generated <> 'NEVER',
+          'generation_expression',
+          c.generation_expression,
+          'is_identity',
+          c.is_identity = 'YES',
+          'identity_generation',
+          c.identity_generation,
           'max_length',
           c.character_maximum_length,
           'numeric_precision',
@@ -53,12 +69,19 @@ export const extractSchemaSQLQuery = `WITH
       ) AS columns
     FROM
       information_schema.columns c
+      -- Join to get table OID for description lookup
+      JOIN pg_catalog.pg_class tbl ON tbl.relname = c.table_name
+      JOIN pg_catalog.pg_namespace nsp ON nsp.oid = tbl.relnamespace
+      AND nsp.nspname = c.table_schema
+      -- Join to get column description
+      LEFT JOIN pg_catalog.pg_description d ON d.objoid = tbl.oid
+      AND d.objsubid = c.ordinal_position
     WHERE
       c.table_schema = 'public'
     GROUP BY
       c.table_name
   ),
-  -- 3b. CONSTRAINTS: Gather PRIMARY KEY, UNIQUE, and CHECK constraints.
+  -- 3b. CONSTRAINTS: Gather PRIMARY KEY, UNIQUE, and CHECK constraints with their descriptions.
   table_constraints AS (
     SELECT
       rel.relname AS table_name,
@@ -66,6 +89,8 @@ export const extractSchemaSQLQuery = `WITH
         jsonb_build_object(
           'name',
           con.conname,
+          'description',
+          obj_description(con.oid, 'pg_constraint'),
           'type',
           CASE con.contype
             WHEN 'p' THEN 'PRIMARY KEY'
@@ -89,7 +114,7 @@ export const extractSchemaSQLQuery = `WITH
     GROUP BY
       rel.relname
   ),
-  -- 3c. DETAILED INDEXES: Gather detailed index information and the full definition.
+  -- 3c. DETAILED INDEXES: Gather detailed index information, definitions, and descriptions.
   detailed_indexes AS (
     SELECT
       tc.relname AS table_name,
@@ -97,6 +122,8 @@ export const extractSchemaSQLQuery = `WITH
         jsonb_build_object(
           'name',
           ic.relname,
+          'description',
+          obj_description(ic.oid, 'pg_class'),
           'definition',
           pg_get_indexdef(ic.oid),
           'is_unique',
@@ -133,12 +160,12 @@ export const extractSchemaSQLQuery = `WITH
               CASE
                 WHEN (ix.option & 1) <> 0 THEN 'DESC'
                 ELSE 'ASC'
-              END,
+                END,
               'nulls_order',
               CASE
                 WHEN (ix.option & 2) <> 0 THEN 'NULLS FIRST'
                 ELSE 'NULLS LAST'
-              END
+                END
             )
             ORDER BY
               ix.ord
@@ -154,54 +181,118 @@ export const extractSchemaSQLQuery = `WITH
     GROUP BY
       tc.relname
   ),
-  -- 3d. FOREIGN KEYS: Gather detailed foreign key relationships.
+  -- 3d. FOREIGN KEYS: Gather detailed foreign key relationships and their descriptions.
   foreign_keys AS (
     SELECT
-      kcu.table_name,
+      conrel.relname AS table_name,
       jsonb_agg(
         jsonb_build_object(
           'name',
-          rc.constraint_name,
+          con.conname,
+          'description',
+          obj_description(con.oid, 'pg_constraint'),
           'columns',
           (
             SELECT
-              jsonb_agg(kcu2.column_name)
+              jsonb_agg(a.attname)
             FROM
-              information_schema.key_column_usage AS kcu2
-            WHERE
-              kcu2.constraint_name = rc.constraint_name
-              AND kcu2.table_schema = rc.constraint_schema
+              unnest(con.conkey) WITH ORDINALITY AS u (attnum, ord)
+              JOIN pg_attribute AS a ON a.attrelid = con.conrelid
+              AND a.attnum = u.attnum
           ),
           'foreign_table',
-          ccu.table_name,
+          confrel.relname,
           'foreign_columns',
           (
             SELECT
-              jsonb_agg(ccu2.column_name)
+              jsonb_agg(a.attname)
             FROM
-              information_schema.constraint_column_usage AS ccu2
-            WHERE
-              ccu2.constraint_name = rc.constraint_name
-              AND ccu2.constraint_schema = rc.constraint_schema
+              unnest(con.confkey) WITH ORDINALITY AS u (attnum, ord)
+              JOIN pg_attribute AS a ON a.attrelid = con.confrelid
+              AND a.attnum = u.attnum
           ),
           'on_update',
-          rc.update_rule,
+          CASE con.confupdtype
+            WHEN 'a' THEN 'NO ACTION'
+            WHEN 'r' THEN 'RESTRICT'
+            WHEN 'c' THEN 'CASCADE'
+            WHEN 'n' THEN 'SET NULL'
+            WHEN 'd' THEN 'SET DEFAULT'
+          END,
           'on_delete',
-          rc.delete_rule,
+          CASE con.confdeltype
+            WHEN 'a' THEN 'NO ACTION'
+            WHEN 'r' THEN 'RESTRICT'
+            WHEN 'c' THEN 'CASCADE'
+            WHEN 'n' THEN 'SET NULL'
+            WHEN 'd' THEN 'SET DEFAULT'
+          END,
           'match_option',
-          rc.match_option
+          CASE con.confmatchtype
+            WHEN 'f' THEN 'FULL'
+            WHEN 'p' THEN 'PARTIAL'
+            WHEN 's' THEN 'SIMPLE'
+          END
         )
       ) AS foreign_keys
     FROM
-      information_schema.referential_constraints rc
-      JOIN information_schema.key_column_usage kcu ON rc.constraint_name = kcu.constraint_name
-      AND rc.constraint_schema = kcu.table_schema
-      JOIN information_schema.constraint_column_usage ccu ON rc.unique_constraint_name = ccu.constraint_name
-      AND rc.unique_constraint_schema = ccu.table_schema
+      pg_constraint con
+      JOIN pg_class conrel ON con.conrelid = conrel.oid
+      JOIN pg_class confrel ON con.confrelid = confrel.oid
+      JOIN pg_namespace nsp ON conrel.relnamespace = nsp.oid
     WHERE
-      kcu.table_schema = 'public'
+      nsp.nspname = 'public'
+      AND con.contype = 'f'
     GROUP BY
-      kcu.table_name
+      conrel.relname
+  ),
+  -- 3e. TRIGGERS: Gather all triggers, their definitions, and descriptions.
+  table_triggers AS (
+    SELECT
+      rel.relname AS table_name,
+      jsonb_agg(
+        jsonb_build_object(
+          'name',
+          tg.tgname,
+          'description',
+          obj_description(tg.oid, 'pg_trigger'),
+          'timing',
+          CASE
+            WHEN (tg.tgtype & (1 << 1)) <> 0 THEN 'BEFORE'
+            WHEN (tg.tgtype & (1 << 6)) <> 0 THEN 'INSTEAD OF'
+            ELSE 'AFTER'
+          END,
+          'event',
+          array_to_string(
+            ARRAY[
+              CASE WHEN (tg.tgtype & (1 << 2)) <> 0 THEN 'INSERT' END,
+              CASE WHEN (tg.tgtype & (1 << 3)) <> 0 THEN 'DELETE' END,
+              CASE WHEN (tg.tgtype & (1 << 4)) <> 0 THEN 'UPDATE' END,
+              CASE WHEN (tg.tgtype & (1 << 5)) <> 0 THEN 'TRUNCATE' END
+            ]::text[],
+            ' OR '
+          ),
+          'level',
+          CASE WHEN (tg.tgtype & (1 << 0)) <> 0 THEN 'ROW' ELSE 'STATEMENT' END,
+          'function_schema',
+          pn.nspname,
+          'function_name',
+          p.proname,
+          'definition',
+          pg_get_triggerdef(tg.oid)
+        )
+      ) AS triggers
+    FROM
+      pg_trigger tg
+      JOIN pg_class rel ON tg.tgrelid = rel.oid
+      JOIN pg_proc p ON tg.tgfoid = p.oid
+      JOIN pg_namespace n ON n.oid = rel.relnamespace
+      JOIN pg_namespace pn ON pn.oid = p.pronamespace
+    WHERE
+      n.nspname = 'public'
+      AND NOT tg.tgisinternal
+    GROUP BY
+      rel.relname
   ),
   -- 4. TABLES_JSON: Assemble all table-related details into a single JSON object per table.
   tables_json AS (
@@ -210,6 +301,8 @@ export const extractSchemaSQLQuery = `WITH
       jsonb_build_object(
         'name',
         t.table_name,
+        'description',
+        d.description,
         'columns',
         COALESCE(tc.columns, '[]'::jsonb),
         'constraints',
@@ -217,14 +310,24 @@ export const extractSchemaSQLQuery = `WITH
         'indexes',
         COALESCE(ti.indexes, '[]'::jsonb),
         'foreign_keys',
-        COALESCE(fk.foreign_keys, '[]'::jsonb)
+        COALESCE(fk.foreign_keys, '[]'::jsonb),
+        'triggers',
+        COALESCE(tr.triggers, '[]'::jsonb)
       ) AS table_data
     FROM
       information_schema.tables t
+      -- Join to get table OID for description lookup
+      JOIN pg_catalog.pg_class tbl ON tbl.relname = t.table_name
+      JOIN pg_catalog.pg_namespace nsp ON nsp.oid = tbl.relnamespace
+      AND nsp.nspname = t.table_schema
+      -- Join to get table description
+      LEFT JOIN pg_catalog.pg_description d ON d.objoid = tbl.oid
+      AND d.objsubid = 0
       LEFT JOIN table_columns tc ON t.table_name = tc.table_name
       LEFT JOIN table_constraints tcon ON t.table_name = tcon.table_name
       LEFT JOIN detailed_indexes ti ON t.table_name = ti.table_name
       LEFT JOIN foreign_keys fk ON t.table_name = fk.table_name
+      LEFT JOIN table_triggers tr ON t.table_name = tr.table_name
     WHERE
       t.table_schema = 'public'
       AND t.table_type = 'BASE TABLE'
@@ -241,7 +344,14 @@ SELECT
       (
         SELECT
           jsonb_agg(
-            jsonb_build_object('name', e.enum_name, 'values', e.values)
+            jsonb_build_object(
+              'name',
+              e.enum_name,
+              'description',
+              e.description,
+              'values',
+              e.values
+            )
           )
         FROM
           enums e
@@ -253,7 +363,14 @@ SELECT
       (
         SELECT
           jsonb_agg(
-            jsonb_build_object('name', v.view_name, 'definition', v.definition)
+            jsonb_build_object(
+              'name',
+              v.view_name,
+              'description',
+              v.description,
+              'definition',
+              v.definition
+            )
           )
         FROM
           views v
