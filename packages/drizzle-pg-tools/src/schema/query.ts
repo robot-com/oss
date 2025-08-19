@@ -95,9 +95,11 @@ export const extractSchemaSQLQuery = `WITH
           'name',
           ic.relname,
           'definition',
-          pg_get_indexdef(ic.oid), -- Added the full index definition string
+          pg_get_indexdef(ic.oid),
           'is_unique',
           i.indisunique,
+          'is_constraint_index',
+          con.conindid IS NOT NULL,
           'is_valid',
           i.indisvalid,
           'index_type',
@@ -112,6 +114,7 @@ export const extractSchemaSQLQuery = `WITH
       pg_class tc -- table class
       JOIN pg_index i ON tc.oid = i.indrelid
       JOIN pg_class ic ON ic.oid = i.indexrelid -- index class
+      LEFT JOIN pg_catalog.pg_constraint con ON con.conindid = ic.oid
       JOIN pg_am am ON ic.relam = am.oid
       JOIN pg_namespace n ON tc.relnamespace = n.oid
       -- This LATERAL join unnests the index keys to get column details

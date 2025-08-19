@@ -1,7 +1,12 @@
 /**
  * Defines the possible referential actions for foreign key constraints.
  */
-export type ReferentialAction = 'CASCADE' | 'RESTRICT' | 'NO ACTION' | 'SET NULL' | 'SET DEFAULT'
+export type ReferentialAction =
+    | 'CASCADE'
+    | 'RESTRICT'
+    | 'NO ACTION'
+    | 'SET NULL'
+    | 'SET DEFAULT'
 
 /**
  * Defines the match type for foreign key constraints.
@@ -63,6 +68,8 @@ export interface IndexDefinition {
     name: string
     /** The complete SQL `CREATE INDEX` definition string. */
     definition: string
+    /** Indicates if the index is created by a constraint. */
+    is_constraint_index: boolean
     /** Indicates if the index enforces a uniqueness constraint. */
     is_unique: boolean
     /** Indicates if the index is currently valid and usable by the query planner. */
