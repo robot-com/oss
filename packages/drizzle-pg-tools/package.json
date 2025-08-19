@@ -13,9 +13,16 @@
     "exports": {
         ".": "./src/index.ts"
     },
-    "dependencies": {},
     "devDependencies": {
+        "@electric-sql/pglite": "^0.3.7",
         "tsx": "^4.20.3",
         "typescript": "^5.9.2"
+    },
+    "peerDependencies": {
+        "@electric-sql/pglite": "^0.3.7"
+    },
+    "dependencies": {
+        "drizzle-orm": "^0.44.4",
+        "postgres": "^3.4.7"
     }
 }
