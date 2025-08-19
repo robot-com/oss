@@ -122,6 +122,8 @@ export interface LocalColumnDefinition {
     numeric_precision?: number | null
     /** The scale for numeric types, if applicable. */
     numeric_scale?: number | null
+    /** The underlying user-defined type name (e.g., 'int4', 'varchar'). */
+    udt_name?: string
 }
 
 /**
@@ -134,6 +136,8 @@ export interface LocalConstraintDefinition {
     description?: string | null
     /** The type of the constraint. */
     type?: ConstraintType
+    /** The column(s) that the constraint applies to. Empty for CHECK constraints that don't reference specific columns. */
+    columns?: string[]
     /** The predicate for a CHECK constraint, or null if not a CHECK constraint. */
     check_predicate?: string | null
     /** Indicates if the constraint does not consider null values as distinct. */

@@ -146,6 +146,8 @@ export interface ConstraintDefinition {
     type: ConstraintType
     /** The SQL definition of the constraint. */
     definition: string
+    /** The column(s) that the constraint applies to. Empty for CHECK constraints that don't reference specific columns. */
+    columns: string[]
     /** The predicate for a CHECK constraint, or null if not a CHECK constraint. */
     check_predicate: string | null
     /** Indicates if the constraint does not consider null values as distinct. */

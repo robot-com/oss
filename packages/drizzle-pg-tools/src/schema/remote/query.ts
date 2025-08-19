@@ -50,7 +50,11 @@ export const extractSchemaSQLQuery = `WITH
           'is_generated',
           c.is_generated <> 'NEVER',
           'generation_expression',
-          c.generation_expression,
+          CASE
+            WHEN c.is_generated <> 'NEVER' AND attr.attgenerated <> '' THEN
+              pg_get_expr(def.adbin, def.adrelid)
+            ELSE c.generation_expression
+          END,
           'is_identity',
           c.is_identity = 'YES',
           'identity_generation',
@@ -76,6 +80,14 @@ export const extractSchemaSQLQuery = `WITH
       -- Join to get column description
       LEFT JOIN pg_catalog.pg_description d ON d.objoid = tbl.oid
       AND d.objsubid = c.ordinal_position
+      -- Join to get pg_attribute for generated column info
+      LEFT JOIN pg_catalog.pg_attribute attr ON attr.attrelid = tbl.oid
+      AND attr.attname = c.column_name
+      AND NOT attr.attisdropped
+      -- Join to get pg_attrdef for generated expressions
+      LEFT JOIN pg_catalog.pg_attrdef def ON def.adrelid = tbl.oid
+      AND def.adnum = attr.attnum
+      AND attr.attgenerated <> ''
     WHERE
       c.table_schema = 'public'
     GROUP BY
@@ -99,6 +111,18 @@ export const extractSchemaSQLQuery = `WITH
           END,
           'definition',
           pg_get_constraintdef(con.oid),
+          'columns',
+          CASE
+            WHEN con.conkey IS NOT NULL THEN (
+              SELECT
+                jsonb_agg(a.attname ORDER BY u.ord)
+              FROM
+                unnest(con.conkey) WITH ORDINALITY AS u (attnum, ord)
+                JOIN pg_attribute AS a ON a.attrelid = con.conrelid
+                AND a.attnum = u.attnum
+            )
+            ELSE '[]'::jsonb
+          END,
           'check_predicate',
           CASE
             WHEN con.contype = 'c' THEN pg_get_expr(con.conbin, con.conrelid)
