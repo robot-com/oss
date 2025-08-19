@@ -114,7 +114,34 @@ export const extractSchemaSQLQuery = `WITH
     GROUP BY
       rel.relname
   ),
-  -- 3c. DETAILED INDEXES: Gather detailed index information, definitions, and descriptions.
+  -- 3c. INDEX COLUMNS: Pre-aggregate index column details.
+  index_columns AS (
+    SELECT
+      i.indexrelid AS index_oid,
+      jsonb_agg(
+        jsonb_build_object(
+          'name',
+          a.attname,
+          'sort_order',
+          CASE WHEN (ix.option & 1) <> 0 THEN 'DESC' ELSE 'ASC' END,
+          'nulls_order',
+          CASE WHEN (ix.option & 2) <> 0 THEN 'NULLS FIRST' ELSE 'NULLS LAST' END
+        )
+        ORDER BY
+          ix.ord
+      ) AS columns
+    FROM
+      pg_index i
+      CROSS JOIN LATERAL unnest(i.indkey, i.indoption)
+      WITH
+        ORDINALITY AS ix (key, option, ord)
+      JOIN pg_attribute a ON a.attrelid = i.indrelid
+      AND a.attnum = ix.key
+      AND NOT a.attisdropped
+    GROUP BY
+      i.indexrelid
+  ),
+  -- 3d. DETAILED INDEXES (FIXED): Use an EXISTS subquery to prevent row duplication.
   detailed_indexes AS (
     SELECT
       tc.relname AS table_name,
@@ -131,13 +158,20 @@ export const extractSchemaSQLQuery = `WITH
           'nulls_not_distinct',
           i.indnullsnotdistinct,
           'is_constraint_index',
-          con.conindid IS NOT NULL,
+          EXISTS (
+            SELECT
+              1
+            FROM
+              pg_constraint
+            WHERE
+              conindid = ic.oid
+          ),
           'is_valid',
           i.indisvalid,
           'index_type',
           am.amname,
           'columns',
-          idx_cols.columns,
+          COALESCE(idx_cols.columns, '[]'::jsonb),
           'predicate',
           pg_get_expr(i.indpred, i.indrelid, true)
         )
@@ -146,42 +180,16 @@ export const extractSchemaSQLQuery = `WITH
       pg_class tc -- table class
       JOIN pg_index i ON tc.oid = i.indrelid
       JOIN pg_class ic ON ic.oid = i.indexrelid -- index class
-      LEFT JOIN pg_catalog.pg_constraint con ON con.conindid = ic.oid
       JOIN pg_am am ON ic.relam = am.oid
       JOIN pg_namespace n ON tc.relnamespace = n.oid
-      -- This LATERAL join unnests the index keys to get column details
-      LEFT JOIN LATERAL (
-        SELECT
-          jsonb_agg(
-            jsonb_build_object(
-              'name',
-              a.attname,
-              'sort_order',
-              CASE
-                WHEN (ix.option & 1) <> 0 THEN 'DESC'
-                ELSE 'ASC'
-                END,
-              'nulls_order',
-              CASE
-                WHEN (ix.option & 2) <> 0 THEN 'NULLS FIRST'
-                ELSE 'NULLS LAST'
-                END
-            )
-            ORDER BY
-              ix.ord
-          ) AS columns
-        FROM
-          unnest(i.indkey, i.indoption) WITH ORDINALITY AS ix (key, option, ord)
-          JOIN pg_attribute a ON a.attrelid = i.indrelid
-          AND a.attnum = ix.key
-      ) idx_cols ON true
+      LEFT JOIN index_columns idx_cols ON idx_cols.index_oid = ic.oid
     WHERE
       n.nspname = 'public'
       AND tc.relkind = 'r' -- only for tables
     GROUP BY
       tc.relname
   ),
-  -- 3d. FOREIGN KEYS: Gather detailed foreign key relationships and their descriptions.
+  -- 3e. FOREIGN KEYS: Gather detailed foreign key relationships and their descriptions.
   foreign_keys AS (
     SELECT
       conrel.relname AS table_name,
@@ -246,7 +254,7 @@ export const extractSchemaSQLQuery = `WITH
     GROUP BY
       conrel.relname
   ),
-  -- 3e. TRIGGERS: Gather all triggers, their definitions, and descriptions.
+  -- 3f. TRIGGERS: Gather all triggers, their definitions, and descriptions.
   table_triggers AS (
     SELECT
       rel.relname AS table_name,
@@ -316,11 +324,9 @@ export const extractSchemaSQLQuery = `WITH
       ) AS table_data
     FROM
       information_schema.tables t
-      -- Join to get table OID for description lookup
       JOIN pg_catalog.pg_class tbl ON tbl.relname = t.table_name
       JOIN pg_catalog.pg_namespace nsp ON nsp.oid = tbl.relnamespace
       AND nsp.nspname = t.table_schema
-      -- Join to get table description
       LEFT JOIN pg_catalog.pg_description d ON d.objoid = tbl.oid
       AND d.objsubid = 0
       LEFT JOIN table_columns tc ON t.table_name = tc.table_name
