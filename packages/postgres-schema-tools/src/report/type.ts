@@ -54,6 +54,7 @@ export interface TableModification {
  * The root type for the JSON diff report.
  */
 export interface JsonReport {
+    has_changes: boolean
     schemas: {
         from: string
         to: string

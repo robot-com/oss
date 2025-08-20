@@ -10,7 +10,7 @@ import type { Difference, JsonReport, TableModification } from './type'
  */
 function diffByName<T extends { name: string }>(
     listA: T[],
-    listB: T[]
+    listB: T[],
 ): {
     added: T[]
     removed: T[]
@@ -50,7 +50,7 @@ function diffByName<T extends { name: string }>(
  */
 function diffSimpleItems<T extends { name: string }>(
     listA: T[],
-    listB: T[]
+    listB: T[],
 ): {
     added: T[]
     removed: T[]
@@ -75,7 +75,7 @@ function diffSimpleItems<T extends { name: string }>(
  */
 function diffSimpleColumns<T extends { name: string }>(
     listA: T[],
-    listB: T[]
+    listB: T[],
 ): {
     added: T[]
     removed: T[]
@@ -107,7 +107,7 @@ function diffSimpleColumns<T extends { name: string }>(
  */
 export function createJsonDiffReport(
     schemaA: RemoteSchema,
-    schemaB: RemoteSchema
+    schemaB: RemoteSchema,
 ): JsonReport {
     const tablesDiff = diffByName(schemaA.tables, schemaB.tables)
     const modifiedTables: TableModification[] = []
@@ -117,10 +117,10 @@ export function createJsonDiffReport(
 
         // Filter out constraint indexes
         const filteredIndexesA = tableA.indexes.filter(
-            (idx) => !idx.is_constraint_index
+            (idx) => !idx.is_constraint_index,
         )
         const filteredIndexesB = tableB.indexes.filter(
-            (idx) => !idx.is_constraint_index
+            (idx) => !idx.is_constraint_index,
         )
 
         const modification: TableModification = {
@@ -128,12 +128,12 @@ export function createJsonDiffReport(
             columns: diffSimpleColumns(tableA.columns, tableB.columns),
             constraints: diffSimpleItems(
                 tableA.constraints,
-                tableB.constraints
+                tableB.constraints,
             ),
             indexes: diffSimpleItems(filteredIndexesA, filteredIndexesB),
             foreign_keys: diffSimpleItems(
                 tableA.foreign_keys,
-                tableB.foreign_keys
+                tableB.foreign_keys,
             ),
             triggers: diffSimpleItems(tableA.triggers, tableB.triggers),
         }
@@ -169,7 +169,15 @@ export function createJsonDiffReport(
         }
     }
 
+    const hasChanges =
+        modifiedTables.length > 0 ||
+        tablesDiff.added.length > 0 ||
+        tablesDiff.removed.length > 0 ||
+        schemaA.enums.length !== schemaB.enums.length ||
+        schemaA.views.length !== schemaB.views.length
+
     const report: JsonReport = {
+        has_changes: hasChanges,
         schemas: {
             from: schemaA.schema,
             to: schemaB.schema,

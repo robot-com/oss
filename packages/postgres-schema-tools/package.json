@@ -26,6 +26,7 @@
         "@electric-sql/pglite": "^0.3.7"
     },
     "dependencies": {
+        "commander": "^14.0.0",
         "drizzle-orm": "^0.44.4",
         "postgres": "^3.4.7"
     }
