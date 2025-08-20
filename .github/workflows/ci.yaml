@@ -22,10 +22,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
-      - run: touch packages/better-mqtt/.env
-      - run: touch packages/rpc/.env
-      - run: touch packages/postgres-schema-tools/.env
-      - run: pnpm -r run test
+      - name: Create empty .env files
+        run: find packages -type d -maxdepth 1 -mindepth 1 -exec touch {}'/.env' \;
+      - name: Run tests
+        run: pnpm -r run test
   build:
     runs-on: ubuntu-latest
     steps:
