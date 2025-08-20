@@ -3,11 +3,10 @@
     "bin": {
         "postgres-schema-tools": "./bin.js"
     },
-    "version": "0.0.1",
+    "version": "0.0.2",
     "type": "module",
     "license": "MIT",
     "private": true,
-    "no-publish": true,
     "scripts": {
         "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
         "build": "node ../build-package",
