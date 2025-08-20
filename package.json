@@ -8,6 +8,6 @@
     },
     "packageManager": "pnpm@10.12.4",
     "devDependencies": {
-        "@biomejs/biome": "2.1.4"
+        "@biomejs/biome": "2.2.0"
     }
 }
