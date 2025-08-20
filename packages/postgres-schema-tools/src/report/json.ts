@@ -114,6 +114,15 @@ export function createJsonDiffReport(
 
     for (const { itemA: tableA, itemB: tableB } of tablesDiff.common) {
         let hasChanges = false
+
+        // Filter out constraint indexes
+        const filteredIndexesA = tableA.indexes.filter(
+            (idx) => !idx.is_constraint_index
+        )
+        const filteredIndexesB = tableB.indexes.filter(
+            (idx) => !idx.is_constraint_index
+        )
+
         const modification: TableModification = {
             name: tableA.name,
             columns: diffSimpleColumns(tableA.columns, tableB.columns),
@@ -121,7 +130,7 @@ export function createJsonDiffReport(
                 tableA.constraints,
                 tableB.constraints
             ),
-            indexes: diffSimpleItems(tableA.indexes, tableB.indexes),
+            indexes: diffSimpleItems(filteredIndexesA, filteredIndexesB),
             foreign_keys: diffSimpleItems(
                 tableA.foreign_keys,
                 tableB.foreign_keys

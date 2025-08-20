@@ -99,6 +99,22 @@ export function createMarkdownReport(
             t.foreign_keys.added.forEach((fk) =>
                 report.push(`  - ➕ Added 🔗 Foreign Key: \`${fk.name}\``)
             )
+
+            // Triggers
+            t.triggers.removed.forEach((tr) =>
+                report.push(`  - ➖ Removed 🔥 Trigger: \`${tr.name}\``)
+            )
+            t.triggers.added.forEach((tr) =>
+                report.push(`  - ➕ Added 🔥 Trigger: \`${tr.name}\``)
+            )
+            t.triggers.modified.forEach((tr) => {
+                report.push(`  - 🔄 Modified 🔥 Trigger: \`${tr.from.name}\``)
+                if (tr.from.definition !== tr.to.definition) {
+                    report.push(
+                        `    - Definition changed: \`${tr.from.definition}\` ➡️ \`${tr.to.definition}\``
+                    )
+                }
+            })
         })
     }
 
