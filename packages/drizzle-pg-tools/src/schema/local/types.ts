@@ -105,7 +105,7 @@ export interface LocalConstraintDefinition {
     /** The comment or description for the constraint. */
     description?: string | null
     /** The type of the constraint. */
-    type?: ConstraintType
+    type: ConstraintType
     /** The column(s) that the constraint applies to. Empty for CHECK constraints that don't reference specific columns. */
     columns?: string[]
     /** The predicate for a CHECK constraint, or null if not a CHECK constraint. */
