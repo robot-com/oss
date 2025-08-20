@@ -24,6 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: touch packages/better-mqtt/.env
       - run: touch packages/rpc/.env
+      - run: touch packages/postgres-schema-tools/.env
       - run: pnpm -r run test
   build:
     runs-on: ubuntu-latest
