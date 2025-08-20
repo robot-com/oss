@@ -28,7 +28,9 @@ if (localVersion === remoteVersion) {
 } else {
     console.info('🆕 New version', remoteVersion, '-->', localVersion)
     const moreArgs = process.argv.slice(2)
-    const p = spawn('npm', ['publish', '--access=public', ...moreArgs], { stdio: 'inherit', cwd: path.resolve('./dist') })
+    const npmArgs = ['publish', ...moreArgs]
+    console.info('$', 'npm', ...npmArgs)
+    const p = spawn('npm', npmArgs, { stdio: 'inherit', cwd: path.resolve('./dist') })
 
     const { promise, resolve, reject } = Promise.withResolvers()
 
