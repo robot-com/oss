@@ -228,8 +228,46 @@ export function deleteTable(name: string): string {
 
 // --- COLUMNS ---
 
+function resolveArrayBaseType(udtName: string): string {
+    // udtName for array types typically starts with '_' (e.g., '_text', '_int4')
+    const base = udtName.startsWith('_') ? udtName.slice(1) : udtName
+    // Map common Postgres internal type names to their SQL aliases
+    const mapping: Record<string, string> = {
+        int2: 'smallint',
+        int4: 'integer',
+        int8: 'bigint',
+        float4: 'real',
+        float8: 'double precision',
+        bool: 'boolean',
+        bpchar: 'character',
+        varchar: 'character varying',
+        timestamptz: 'timestamptz',
+        timetz: 'timetz',
+        // leave others as-is (e.g., text, uuid, bytea, json, jsonb)
+    }
+    return mapping[base] ?? base
+}
+
+function resolveColumnType(col: LocalColumnDefinition): string {
+    // Handle enums and other user-defined types
+    if (col.data_type === 'USER-DEFINED' && col.udt_name) {
+        // Type names are identifiers; quote to be safe
+        return quote(col.udt_name)
+    }
+
+    // Handle array types using udt_name like '_text', '_int4'
+    if (col.data_type === 'ARRAY' && col.udt_name) {
+        const base = resolveArrayBaseType(col.udt_name)
+        return `${base}[]`
+    }
+
+    // Fallback to provided data_type string
+    return col.data_type
+}
+
 function formatColumnDefinition(col: LocalColumnDefinition): string {
-    const parts = [`${quote(col.name)} ${col.data_type}`]
+    const typeSql = resolveColumnType(col)
+    const parts = [`${quote(col.name)} ${typeSql}`]
     if (col.is_nullable === false) {
         parts.push('NOT NULL')
     }
