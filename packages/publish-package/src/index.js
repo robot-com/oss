@@ -6,7 +6,7 @@ import path from 'node:path'
  * The parsed contents of the root `package.json` file.
  * @type {Record<string, any> | null}
  */
-const pkg = JSON.parse(await readFile('./dist/package.json', 'utf-8')).catch(() => null)
+const pkg = JSON.parse(await readFile('./dist/package.json', 'utf-8').catch(() => 'null'))
 
 if (!pkg) {
     throw new Error('No package.json found. Please build your package first.')
