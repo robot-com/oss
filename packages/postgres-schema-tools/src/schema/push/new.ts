@@ -1,7 +1,7 @@
 import type { LocalSchema } from '../local/types' // Assuming types are in './schema-types.ts'
 import {
-    addForeignKey,
     createEnum,
+    createForeignKey,
     createIndex,
     createTable,
     createTrigger,
@@ -29,7 +29,7 @@ export function generatePushNewSchema(schema: LocalSchema): string[] {
     // 1. Create Enums first, as they are dependencies for tables.
     if (schema.enums) {
         for (const enumDef of schema.enums) {
-            statements.push(createEnum(enumDef))
+            statements.push(...createEnum(enumDef))
         }
     }
 
@@ -37,7 +37,7 @@ export function generatePushNewSchema(schema: LocalSchema): string[] {
     // Comments for tables, columns, and constraints are also generated here.
     if (schema.tables) {
         for (const tableDef of schema.tables) {
-            statements.push(createTable(tableDef))
+            statements.push(...createTable(tableDef))
         }
     }
 
@@ -49,21 +49,21 @@ export function generatePushNewSchema(schema: LocalSchema): string[] {
             // Add Indexes
             if (tableDef.indexes) {
                 for (const indexDef of tableDef.indexes) {
-                    statements.push(createIndex(tableDef.name, indexDef))
+                    statements.push(...createIndex(tableDef.name, indexDef))
                 }
             }
 
             // Add Foreign Keys
             if (tableDef.foreign_keys) {
                 for (const fkDef of tableDef.foreign_keys) {
-                    statements.push(addForeignKey(tableDef.name, fkDef))
+                    statements.push(...createForeignKey(tableDef.name, fkDef))
                 }
             }
 
             // Add Triggers
             if (tableDef.triggers) {
                 for (const triggerDef of tableDef.triggers) {
-                    statements.push(createTrigger(tableDef.name, triggerDef))
+                    statements.push(...createTrigger(tableDef.name, triggerDef))
                 }
             }
         }
@@ -72,7 +72,7 @@ export function generatePushNewSchema(schema: LocalSchema): string[] {
     // 4. Create Views, which may depend on the previously created tables.
     if (schema.views) {
         for (const viewDef of schema.views) {
-            statements.push(createView(viewDef))
+            statements.push(...createView(viewDef))
         }
     }
 
