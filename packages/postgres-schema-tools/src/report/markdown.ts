@@ -1,26 +1,7 @@
-import type {
-    ColumnDefinition,
-    ConstraintDefinition,
-    EnumDefinition,
-    ForeignKeyDefinition,
-    IndexDefinition,
-    RemoteSchema,
-    TableDefinition,
-    ViewDefinition,
-} from '../schema/remote/types' // Adjust the import path as needed
+import type { JsonReport } from './type'
 
-/**
- * Compares two PublicSchema objects and generates a Markdown report of the differences.
- *
- * @param schemaA The original or "before" schema.
- * @param schemaB The new or "after" schema.
- * @param nameA An optional name for the first schema (e.g., 'production').
- * @param nameB An optional name for the second schema (e.g., 'development').
- * @returns A string containing the Markdown-formatted difference report.
- */
 export function createMarkdownReport(
-    schemaA: RemoteSchema,
-    schemaB: RemoteSchema,
+    jsonReport: JsonReport,
     nameA = 'Current',
     nameB = 'New'
 ): string {
@@ -29,222 +10,96 @@ export function createMarkdownReport(
     report.push(`# 📄 Schema Difference Report: \`${nameA}\` vs \`${nameB}\``)
     report.push(`> Generated at: ${new Date().toISOString()}`)
 
-    // --- Generic Helper for Comparing Lists of Items by Name ---
-    function compareLists<T extends { name: string }>(
-        listA: T[],
-        listB: T[],
-        entityName: string,
-        compareFn: (itemA: T, itemB: T) => string[]
-    ): string[] {
-        const diffs: string[] = []
-        const mapA = new Map(listA.map((item) => [item.name, item]))
-        const mapB = new Map(listB.map((item) => [item.name, item]))
+    // Enums section
+    if (
+        jsonReport.enums.removed.length > 0 ||
+        jsonReport.enums.added.length > 0 ||
+        jsonReport.enums.modified.length > 0
+    ) {
+        report.push('\n## 📜 Enums')
+        jsonReport.enums.removed.forEach((e) =>
+            report.push(`- ➖ Removed Enum: \`${e.name}\``)
+        )
+        jsonReport.enums.added.forEach((e) =>
+            report.push(`- ➕ Added Enum: \`${e.name}\``)
+        )
+        jsonReport.enums.modified.forEach((e) =>
+            report.push(`- 🔄 Modified Enum: \`${e.from.name}\``)
+        )
+    }
 
-        // Check for removed and modified items
-        for (const [name, itemA] of mapA.entries()) {
-            if (mapB.has(name)) {
-                const itemB = mapB.get(name)!
-                const itemDiffs = compareFn(itemA, itemB)
-                if (itemDiffs.length > 0) {
-                    diffs.push(
-                        `- 🔄 Modified ${entityName}: \`${name}\``,
-                        ...itemDiffs
-                    )
-                }
-            } else {
-                diffs.push(`- ➖ Removed ${entityName}: \`${name}\``)
+    // Views section
+    if (
+        jsonReport.views.removed.length > 0 ||
+        jsonReport.views.added.length > 0 ||
+        jsonReport.views.modified.length > 0
+    ) {
+        report.push('\n## 📜 Views')
+        jsonReport.views.removed.forEach((v) =>
+            report.push(`- ➖ Removed View: \`${v.name}\``)
+        )
+        jsonReport.views.added.forEach((v) =>
+            report.push(`- ➕ Added View: \`${v.name}\``)
+        )
+        jsonReport.views.modified.forEach((v) => {
+            report.push(`- 🔄 Modified View: \`${v.from.name}\``)
+            if (v.from.definition !== v.to.definition) {
+                report.push(
+                    `  - Definition changed: \`${v.from.definition}\` ➡️ \`${v.to.definition}\``
+                )
             }
-        }
-
-        // Check for added items
-        for (const name of mapB.keys()) {
-            if (!mapA.has(name)) {
-                diffs.push(`- ➕ Added ${entityName}: \`${name}\``)
-            }
-        }
-
-        return diffs
+        })
     }
 
-    // --- Property Comparison Helper ---
-    function compareProperty(
-        propName: string,
-        valA: unknown,
-        valB: unknown
-    ): string | null {
-        const strA = JSON.stringify(valA ?? 'null')
-        const strB = JSON.stringify(valB ?? 'null')
-        if (strA !== strB) {
-            return `  - ${propName} changed: \`${strA}\` ➡️ \`${strB}\``
-        }
-        return null
-    }
-
-    // --- Specific Comparison Functions ---
-
-    const compareEnums = (a: EnumDefinition, b: EnumDefinition): string[] => {
-        return [compareProperty('Values', a.values, b.values)].filter(
-            (d): d is string => d !== null
+    // Tables section
+    if (
+        jsonReport.tables.removed.length > 0 ||
+        jsonReport.tables.added.length > 0 ||
+        jsonReport.tables.modified.length > 0
+    ) {
+        report.push('\n## 🔲 Tables')
+        jsonReport.tables.removed.forEach((t) =>
+            report.push(`- ➖ Removed 🔲 Table: \`${t.name}\``)
         )
-    }
-
-    const compareViews = (a: ViewDefinition, b: ViewDefinition): string[] => {
-        return [
-            compareProperty('Definition', a.definition, b.definition),
-        ].filter((d): d is string => d !== null)
-    }
-
-    const compareColumns = (
-        a: ColumnDefinition,
-        b: ColumnDefinition
-    ): string[] => {
-        const diffs: string[] = []
-        const props: (keyof ColumnDefinition)[] = [
-            'data_type',
-            'is_nullable',
-            'default',
-            'max_length',
-            'numeric_precision',
-            'numeric_scale',
-        ]
-        for (const prop of props) {
-            const diff = compareProperty(prop, a[prop], b[prop])
-            if (diff) {
-                diffs.push(diff)
-            }
-        }
-        return diffs
-    }
-
-    const compareConstraints = (
-        a: ConstraintDefinition,
-        b: ConstraintDefinition
-    ): string[] => {
-        return [
-            compareProperty('Definition', a.definition, b.definition),
-        ].filter((d): d is string => d !== null)
-    }
-
-    const compareForeignKeys = (
-        a: ForeignKeyDefinition,
-        b: ForeignKeyDefinition
-    ): string[] => {
-        const diffs: string[] = []
-        const props: (keyof ForeignKeyDefinition)[] = [
-            'columns',
-            'foreign_table',
-            'foreign_columns',
-            'on_update',
-            'on_delete',
-        ]
-        for (const prop of props) {
-            const diff = compareProperty(prop, a[prop], b[prop])
-            if (diff) {
-                diffs.push(diff)
-            }
-        }
-        return diffs
-    }
-
-    const compareIndexes = (
-        a: IndexDefinition,
-        b: IndexDefinition
-    ): string[] => {
-        // A simple definition check is a great catch-all
-        return [
-            compareProperty('Definition', a.definition, b.definition),
-        ].filter((d): d is string => d !== null)
-    }
-
-    const compareTables = (
-        tableA: TableDefinition,
-        tableB: TableDefinition
-    ): string[] => {
-        const tableDiffs: string[] = []
-
-        // Compare Columns
-        const colDiffs = compareLists(
-            tableA.columns,
-            tableB.columns,
-            '📊 Column',
-            compareColumns
+        jsonReport.tables.added.forEach((t) =>
+            report.push(`- ➕ Added 🔲 Table: \`${t.name}\``)
         )
-        if (colDiffs.length > 0) {
-            tableDiffs.push(...colDiffs)
-        }
 
-        // Compare Constraints
-        const conDiffs = compareLists(
-            tableA.constraints,
-            tableB.constraints,
-            '🔑 Constraint',
-            compareConstraints
-        )
-        if (conDiffs.length > 0) {
-            tableDiffs.push(...conDiffs)
-        }
+        jsonReport.tables.modified.forEach((t) => {
+            report.push(`- 🔄 Modified 🔲 Table: \`${t.name}\``)
 
-        // Compare Indexes
-        const idxDiffs = compareLists(
-            tableA.indexes,
-            tableB.indexes,
-            '⚡️ Index',
-            compareIndexes
-        )
-        if (idxDiffs.length > 0) {
-            tableDiffs.push(...idxDiffs)
-        }
+            // Columns
+            t.columns.removed.forEach((c) =>
+                report.push(`  - ➖ Removed 📊 Column: \`${c.name}\``)
+            )
+            t.columns.added.forEach((c) =>
+                report.push(`  - ➕ Added 📊 Column: \`${c.name}\``)
+            )
 
-        // Compare Foreign Keys
-        const fkDiffs = compareLists(
-            tableA.foreign_keys,
-            tableB.foreign_keys,
-            '🔗 Foreign Key',
-            compareForeignKeys
-        )
-        if (fkDiffs.length > 0) {
-            tableDiffs.push(...fkDiffs)
-        }
+            // Constraints
+            t.constraints.removed.forEach((c) =>
+                report.push(`  - ➖ Removed 🔑 Constraint: \`${c.name}\``)
+            )
+            t.constraints.added.forEach((c) =>
+                report.push(`  - ➕ Added 🔑 Constraint: \`${c.name}\``)
+            )
 
-        return tableDiffs.map((d) => `  ${d}`) // Indent for readability
-    }
+            // Indexes
+            t.indexes.removed.forEach((i) =>
+                report.push(`  - ➖ Removed ⚡️ Index: \`${i.name}\``)
+            )
+            t.indexes.added.forEach((i) =>
+                report.push(`  - ➕ Added ⚡️ Index: \`${i.name}\``)
+            )
 
-    // --- Execute Comparisons ---
-
-    const enumDiffs = compareLists(
-        schemaA.enums,
-        schemaB.enums,
-        'Enum',
-        compareEnums
-    )
-    if (enumDiffs.length > 0) {
-        report.push('\n## 📜 Enums', ...enumDiffs)
-    }
-
-    const viewDiffs = compareLists(
-        schemaA.views,
-        schemaB.views,
-        'View',
-        compareViews
-    )
-    if (viewDiffs.length > 0) {
-        report.push('\n## 📜 Views', ...viewDiffs)
-    }
-
-    const tableDiffs = compareLists(
-        schemaA.tables,
-        schemaB.tables,
-        '🔲 Table',
-        compareTables
-    )
-    if (tableDiffs.length > 0) {
-        report.push('\n## 🔲 Tables', ...tableDiffs)
-    }
-
-    // --- Final Report ---
-    if (report.length === 2) {
-        // Only title and timestamp were added
-        return `# ✅ No differences found between \`${nameA}\` and \`${nameB}\`.`
+            // Foreign Keys
+            t.foreign_keys.removed.forEach((fk) =>
+                report.push(`  - ➖ Removed 🔗 Foreign Key: \`${fk.name}\``)
+            )
+            t.foreign_keys.added.forEach((fk) =>
+                report.push(`  - ➕ Added 🔗 Foreign Key: \`${fk.name}\``)
+            )
+        })
     }
 
     return report.join('\n')

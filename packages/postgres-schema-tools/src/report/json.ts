@@ -71,6 +71,34 @@ function diffSimpleItems<T extends { name: string }>(
 }
 
 /**
+ * Equivalent to diffSimpleItems but for columns, it will ignore position changes.
+ */
+function diffSimpleColumns<T extends { name: string }>(
+    listA: T[],
+    listB: T[]
+): {
+    added: T[]
+    removed: T[]
+    modified: Difference<T>[]
+} {
+    const { added, removed, common } = diffByName(listA, listB)
+    const modified: Difference<T>[] = []
+
+    for (const { itemA, itemB } of common) {
+        const itemANoPos = { ...itemA, position: undefined }
+        const itemBNoPos = { ...itemB, position: undefined }
+
+        // Using JSON.stringify for a pragmatic deep comparison.
+        // This is generally safe for structured data from a database schema.
+        if (JSON.stringify(itemANoPos) !== JSON.stringify(itemBNoPos)) {
+            modified.push({ from: itemA, to: itemB })
+        }
+    }
+
+    return { added, removed, modified }
+}
+
+/**
  * Generates a detailed report of all changes between two database schemas.
  *
  * @param schemaA The original ("before") schema definition.
@@ -88,7 +116,7 @@ export function createJsonDiffReport(
         let hasChanges = false
         const modification: TableModification = {
             name: tableA.name,
-            columns: diffSimpleItems(tableA.columns, tableB.columns),
+            columns: diffSimpleColumns(tableA.columns, tableB.columns),
             constraints: diffSimpleItems(
                 tableA.constraints,
                 tableB.constraints

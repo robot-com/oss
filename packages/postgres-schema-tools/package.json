@@ -1,5 +1,8 @@
 {
     "name": "@robot.com/postgres-schema-tools",
+    "bin": {
+        "postgres-schema-tools": "./bin.js"
+    },
     "version": "0.0.1",
     "type": "module",
     "license": "MIT",
@@ -11,7 +14,8 @@
         "publish": "node ../publish-package"
     },
     "exports": {
-        ".": "./src/index.ts"
+        ".": "./src/index.ts",
+        "./bin": "./src/bin/main.ts"
     },
     "devDependencies": {
         "@electric-sql/pglite": "^0.3.7",
