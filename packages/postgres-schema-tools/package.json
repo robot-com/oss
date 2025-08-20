@@ -1,5 +1,5 @@
 {
-    "name": "@robot.com/drizzle-pg-tools",
+    "name": "@robot.com/postgres-schema-tools",
     "version": "0.0.1",
     "type": "module",
     "license": "MIT",
