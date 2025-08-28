@@ -1,0 +1,29 @@
+{
+    "name": "@robot.com/reliable-backend-framework",
+    "version": "0.0.1",
+    "type": "module",
+    "license": "MIT",
+    "private": true,
+    "no-publish": true,
+    "scripts": {
+        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
+        "build": "node ../build-package",
+        "publish": "node ../publish-package"
+    },
+    "exports": {
+        "./client": "./src/client/index.ts",
+        "./server": "./src/server/index.ts"
+    },
+    "dependencies": {
+        "@nats-io/jetstream": "^3.0.2",
+        "@nats-io/nats-core": "^3.0.2",
+        "@whatwg-node/server": "^0.10.6",
+        "zod": "^3.24.4"
+    },
+    "devDependencies": {
+        "@nats-io/transport-node": "^3.1.0",
+        "@types/node": "^20.19.2",
+        "tsx": "^4.20.3",
+        "typescript": "^5.9.2"
+    }
+}
