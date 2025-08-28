@@ -27,7 +27,6 @@
     *   [Atomicity & The Transactional Outbox Pattern](#atomicity--the-transactional-outbox-pattern)
     *   [Idempotency and Deduplication](#idempotency-and-deduplication)
     *   [Middleware](#middleware)
-    *   [Caching Queries](#caching-queries)
     *   [Interacting with NATS Directly](#interacting-with-nats-directly)
 6.  [Full Example: User Signup Flow](#6-full-example-user-signup-flow)
 
@@ -69,7 +68,7 @@ Key characteristics of a Query in RBF:
 *   **Read-Only:** Queries are guaranteed not to alter any data.
 *   **Transactional:** Like mutations, queries run inside a database transaction to ensure a consistent, atomic view of the data at a single point in time.
 *   **Cannot Schedule Side-Effects:** To enforce their read-only nature, queries do not have access to the `scheduler` and cannot enqueue other mutations or queries.
-*   **Cacheable:** Queries can be configured with caching strategies to improve performance and reduce database load.
+*   **Cacheable:** Queries are designed to be cacheable to improve performance, a feature planned for a future release.
 
 ### Queues
 
@@ -79,7 +78,7 @@ You define queues when you initialize your application. Each queue can have its 
 
 ### The Scheduler
 
-The `scheduler` is a special object available only within Mutation handlers. It is the interface for defining the side-effects of a mutation. It allows you to enqueue follow-up tasks that will only be executed if the current mutation's transaction commits successfully.
+The `scheduler` is a special object available only within Mutation handlers. It is the interface for defining the side-effects of a mutation. It allows you to schedule follow-up tasks to run immediately after the transaction commits (`enqueue`), at a specific time (`runAt`), after a delay (`runAfter`), or to publish a raw NATS message for maximum flexibility (`publish`).
 
 This is the key to building complex, multi-step workflows that are fully atomic and reliable.
 
@@ -151,15 +150,16 @@ Once the app is defined, you create a runnable instance with `createBackend`. Th
 import { createBackend } from 'rbf-framework';
 import { app, AppContext } from './app';
 import { connect as connectToNats } from 'nats';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from './db/schema';
 
 async function main() {
   // 1. Establish connections to external services
   const natsConnection = await connectToNats({ servers: 'nats://localhost:4222' });
-  const pool = new Pool({ connectionString: 'postgres://user:pass@host:port/db' });
-  const db = drizzle(pool, { schema });
+  const connectionString = 'postgres://user:pass@host:port/db';
+  const pgClient = postgres(connectionString);
+  const db = drizzle(pgClient, { schema });
 
   // 2. Create the backend instance
   const backend = await createBackend(app, {
@@ -226,7 +226,12 @@ Defines a mutation and registers it with the application.
     *   `handler`: The async function containing the business logic. It receives a single object argument with the following properties:
         *   `ctx`: The context, potentially enriched by middleware.
         *   `db`: The Drizzle `PgTransaction` instance for this operation.
-        *   `scheduler`: An object with methods to enqueue follow-up tasks (`enqueue`, `runAfter`, `runAt`, `publish`).
+        *   `scheduler`: An object with methods to manage side-effects and control flow:
+            *   `enqueue`: Schedules a task to run immediately after the current transaction commits.
+            *   `runAt`: Schedules a task to run at a specific `Date`.
+            *   `runAfter`: Schedules a task to run after a specified delay (e.g., `{ seconds: 30 }`).
+            *   `publish`: Publishes a raw message to a NATS subject, bypassing the RBF task format. Useful for integrating with other systems.
+            *   `setRetryDelay`: If the current transaction fails and the message is NACK'd, this method suggests a delay before NATS should redeliver it. This allows for custom backoff strategies.
         *   `input`: The validated input payload.
         *   `params`: An object containing the parsed parameters from the `path`.
 
@@ -237,7 +242,7 @@ import { app, JobsContext } from './app';
 import { z } from 'zod';
 
 export const createUser = app.mutation('jobs', {
-  path: 'users.create',
+  path: 'users-create',
   input: z.object({
     email: z.string().email(),
     name: z.string(),
@@ -274,7 +279,6 @@ Defines a query. The API is nearly identical to `app.mutation`, with a few key d
 *   **`handler`**: The handler function receives an object with:
     *   `ctx`: The context.
     *   `db`: The read-only `PgTransaction` instance.
-    *   `cache`: An object with methods to control caching (`get`, `set`, `invalidate`).
     *   `input`: The validated input.
     *   `params`: The parsed path parameters.
     *   **Note:** The `scheduler` object is **not** available in query handlers.
@@ -288,27 +292,18 @@ import { z } from 'zod';
 export const getUserById = app.query('jobs', {
   path: 'users.get.$userId',
   input: z.null(), // No input body needed, ID is from the path
-  output: z.object({
-    id: z.string(),
-    name: z.string(),
-  }).nullable(),
-  handler: async ({ ctx, db, cache, params }) => {
+  output: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+    })
+    .nullable(),
+  handler: async ({ ctx, db, params }) => {
     const { userId } = params;
-    
-    // Attempt to retrieve from cache first
-    const cachedUser = await cache.get(`user:${userId}`);
-    if (cachedUser) {
-      return cachedUser;
-    }
 
     const user = await db.query.users.findFirst({
       where: (users, { eq }) => eq(users.id, userId),
     });
-
-    // Store the result in the cache for future requests
-    if (user) {
-      await cache.set(`user:${userId}`, user, { ttl: 3600 }); // Cache for 1 hour
-    }
 
     return user;
   },
@@ -334,7 +329,6 @@ async function runClientLogic(backend) {
       params: { userId: result.id },
     });
     console.log('Fetched user:', user);
-
   } catch (error) {
     console.error('Client operation failed:', error);
   }
@@ -383,19 +377,6 @@ Middleware provides a powerful way to run cross-cutting logic for all operations
 
 Since middleware runs inside the same transaction as the handler, any database reads it performs are consistent with the handler's view of the data.
 
-### Caching Queries
-
-The `cache` object passed to query handlers provides a simple interface for caching strategies. The default implementation could be an in-memory cache, but it can be configured to use an external service like Redis for a distributed cache.
-
-```ts
-// Example cache object API
-interface Cache {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T, options?: { ttl: number }): Promise<void>;
-  invalidate(key: string): Promise<void>;
-}
-```
-
 ### Interacting with NATS Directly
 
 While using the RBF client is the easiest way to interact with your backend, any NATS-compatible client can send messages. To do so, you must adhere to the following contract:
@@ -403,7 +384,7 @@ While using the RBF client is the easiest way to interact with your backend, any
 *   **Subject:** The NATS subject is a combination of the queue name and the operation path. For a mutation with `queueName: 'jobs'` and `path: 'users.create'`, the subject would be `jobs.users.create`. For a path with params like `'posts.update.$postId'`, a concrete subject would be `jobs.posts.update.123`.
 *   **Headers:**
     *   `RBF-Request-Id`: A unique identifier for this specific request (e.g., a UUID). This is crucial for idempotency.
-    *   `Content-Type`: Must be `application/json`.
+    *   `Content-Type`: Optional. If not provided, the payload is assumed to be `application/json`.
 *   **Reply-To:** If you expect a response (as is typical for queries and mutations), you must set the NATS `reply-to` field to a subject the client is subscribed to. RBF will publish the result or error to this subject.
 *   **Payload:** The body of the message should be the JSON-stringified input object.
 
