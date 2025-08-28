@@ -78,6 +78,37 @@ importers:
         specifier: ^20.19.10
         version: 20.19.10
 
+  packages/reliable-backend-framework:
+    dependencies:
+      '@nats-io/jetstream':
+        specifier: ^3.0.2
+        version: 3.1.0
+      '@nats-io/nats-core':
+        specifier: ^3.0.2
+        version: 3.1.0
+      '@whatwg-node/server':
+        specifier: ^0.10.6
+        version: 0.10.12
+      drizzle-orm:
+        specifier: ^0.44.4
+        version: 0.44.4(@electric-sql/pglite@0.3.7)(postgres@3.4.7)
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@nats-io/transport-node':
+        specifier: ^3.1.0
+        version: 3.1.0
+      '@types/node':
+        specifier: ^20.19.2
+        version: 20.19.10
+      tsx:
+        specifier: ^4.20.3
+        version: 4.20.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
+
   packages/rpc:
     dependencies:
       '@nats-io/jetstream':
