@@ -388,7 +388,59 @@ While using the RBF client is the easiest way to interact with your backend, any
 *   **Reply-To:** If you expect a response (as is typical for queries and mutations), you must set the NATS `reply-to` field to a subject the client is subscribed to. RBF will publish the result or error to this subject.
 *   **Payload:** The body of the message should be the JSON-stringified input object.
 
-## 6. Full Example: User Signup Flow
+## 6. Roadmap & Future Directions
+
+RBF 1.0.0 provides a solid foundation for building reliable applications. Our vision is to continue enhancing the framework's capabilities, focusing on production readiness, operational observability, and an improved developer experience. The following is a list of features and improvements planned for future releases.
+
+### Core Functionality & Reliability
+
+*   **Advanced Error Handling & Retries:**
+    *   **Configurable Retry Policies:** Introduce declarative, per-queue or per-mutation configuration for retry strategies, including exponential backoff, fixed intervals, and maximum attempt limits.
+    *   **Dead-Letter Queues (DLQ):** Automatically forward messages that have exhausted their retries to a configurable Dead-Letter Queue for manual inspection and replay.
+    *   **Retryable vs. Permanent Errors:** Provide a mechanism within the handler for developers to signal whether a thrown error is temporary (and should be retried) or permanent (and should be sent to the DLQ immediately).
+
+*   **Database Schema Management:**
+    *   **Automated Migrations:** Provide a CLI command (e.g., `rbf db:init`) to generate the initial SQL migration for creating the required `rbf_outbox` and `rbf_results` tables.
+
+*   **Schema Versioning:**
+    *   **Input Schema Evolution:** Establish best practices and provide tooling for versioning mutation and query schemas to ensure backward compatibility and safe deployments when message contracts change.
+
+### Production & Operational Concerns
+
+*   **First-Class Observability:**
+    *   **Structured Logging:** Emit detailed, structured logs from the framework core to provide insight into the lifecycle of every message.
+    *   **Metrics:** Natively export key performance indicators in a standard format like Prometheus, including queue depth, message processing latency, error rates per-mutation, and transaction duration.
+    *   **Distributed Tracing:** Integrate with OpenTelemetry to automatically propagate trace contexts across services, providing a complete view of a request as it flows through multiple mutations.
+
+*   **Deployment & Scaling:**
+    *   **Dedicated Workers:** Provide clear patterns and configuration options for deploying dedicated worker pools that subscribe to specific high-volume queues.
+    *   **Zero-Downtime Deployment:** Document best practices for performing zero-downtime deployments, ensuring that in-flight messages are processed correctly during a version upgrade.
+
+### Developer Experience & Advanced Patterns
+
+*   **Dedicated Testing Library:**
+    *   Release a `@robot.com/rbf-testing` package with utilities to simplify testing, including a mock `scheduler` for asserting on enqueued tasks, an in-memory queue implementation, and helpers for constructing test contexts.
+
+*   **Recurring & Cron Jobs:**
+    *   Introduce a new primitive, `app.cron()`, for defining recurring tasks on a schedule (e.g., `'0 2 * * *'` for 2 AM daily), integrating seamlessly with the existing reliability guarantees.
+
+*   **Task Cancellation:**
+    *   Implement a mechanism to cancel scheduled tasks that have not yet executed. The `scheduler.runAt` and `runAfter` methods would return a unique job ID that can be used for cancellation.
+
+*   **RBF Command-Line Interface (CLI):**
+    *   Develop a CLI tool for interacting with a running RBF application. Planned commands include:
+        *   `rbf queue:list`: List all defined queues.
+        *   `rbf queue:inspect <queueName>`: View messages in a queue or its associated DLQ.
+        *   `rbf job:trigger <path> [input]`: Manually trigger a mutation or query from the command line.
+        *   `rbf job:replay <messageId>`: Replay a specific message from the DLQ.
+
+*   **Improved Documentation:**
+    *   Add architectural and sequence diagrams to visually explain core concepts like the transactional outbox pattern and the full lifecycle of a request.
+
+*   **Client-Side Timeouts:**
+    *   Allow the RBF client to specify a timeout when invoking a mutation or query, preventing the `await` from hanging indefinitely if the system is under heavy load.
+
+## 7. Full Example: User Signup Flow
 
 `app.ts`:
 ```ts
