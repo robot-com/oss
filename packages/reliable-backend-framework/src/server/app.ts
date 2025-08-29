@@ -3,7 +3,7 @@ import z from 'zod'
 import type { AppDefinition, Middleware, QueueConfig } from '../types'
 import { Registry } from './registry'
 
-function defineBackend<
+export function defineBackend<
     TBaseContext = {},
     TSchema extends Record<string, unknown> = {},
     TQueues extends Record<string, QueueConfig> = {},
@@ -24,7 +24,6 @@ function defineBackend<
     TQueryMetadata,
     TMiddlewareOutputContext
 > {
-    // TODO: ...
     const context = opts.context ?? ({} as TBaseContext)
     const schema = opts.schema ?? ({} as TSchema)
     const middleware =
@@ -95,45 +94,4 @@ const backend = defineBackend({
             },
         }
     },
-})
-
-const createJob = backend.mutation('jobs', {
-    path: '/',
-    input: z.object({
-        name: z.string(),
-    }),
-    output: z.object({
-        name: z.string(),
-        id: z.string(),
-    }),
-    handler: async ({ input, ctx }): Promise<{ name: string; id: string }> => {
-        return {
-            name: input.name,
-            id: '123',
-        }
-    },
-})
-
-const deleteJob = backend.mutation('jobs', {
-    path: '/',
-    input: z.object({
-        id: z.string(),
-    }),
-    handler: async ({ input, ctx }) => {
-        return {
-            deleted: true,
-        }
-    },
-})
-
-const orgBackend = backend.middleware(async (args) => {
-    return {
-        ctx: {
-            ...args.ctx,
-            org: {
-                id: '123',
-                name: 'Acme',
-            },
-        },
-    }
 })
