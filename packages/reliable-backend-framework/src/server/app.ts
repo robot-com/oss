@@ -35,3 +35,15 @@ const createJob = backend.mutation('jobs', {
         }
     },
 })
+
+const deleteJob = backend.mutation('jobs', {
+    path: '/',
+    input: z.object({
+        id: z.string(),
+    }),
+    handler: async ({ input }) => {
+        return {
+            deleted: true,
+        }
+    },
+})

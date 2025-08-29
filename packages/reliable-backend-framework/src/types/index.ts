@@ -145,7 +145,10 @@ export type MutationDefinition<
     TSchema extends Record<string, unknown>,
     TPath extends string,
     TInput extends z.ZodType = z.ZodNull,
-    TOutput extends z.ZodType = z.ZodAny,
+    TOutput extends z.ZodType = z.ZodAny, // The Zod schema for the output
+    // The actual type returned by the handler. It must be assignable to the
+    // type inferred from the TOutput schema. This enables inference.
+    THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
 > = {
     /** The addressable path for this mutation, e.g., 'users.create'. */
     path: TPath
@@ -156,7 +159,7 @@ export type MutationDefinition<
     /** The business logic for the mutation. */
     handler: (
         args: MutationHandlerArgs<TContext, TSchema, TPath, TInput>,
-    ) => Promise<z.infer<TOutput>>
+    ) => Promise<THandlerOutput>
 
     // --- Internal properties for type inference ---
     readonly _type: 'mutation'
@@ -173,7 +176,10 @@ export type QueryDefinition<
     TSchema extends Record<string, unknown>,
     TPath extends string,
     TInput extends z.ZodType = z.ZodNull,
-    TOutput extends z.ZodType = z.ZodAny,
+    TOutput extends z.ZodType = z.ZodAny, // The Zod schema for the output
+    // The actual type returned by the handler. It must be assignable to the
+    // type inferred from the TOutput schema. This enables inference.
+    THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
 > = {
     /** The addressable path for this query, e.g., 'users.get.$userId'. */
     path: TPath
@@ -184,7 +190,7 @@ export type QueryDefinition<
     /** The business logic for the query. */
     handler: (
         args: QueryHandlerArgs<TContext, TSchema, TPath, TInput>,
-    ) => Promise<z.infer<TOutput>>
+    ) => Promise<THandlerOutput>
 
     // --- Internal properties for type inference ---
     readonly _type: 'query'
@@ -217,14 +223,29 @@ export type AppDefinition<
         TQueueName extends keyof TQueues,
         TPath extends string,
         TInput extends z.ZodType = z.ZodNull,
-        TOutput extends z.ZodType = z.ZodAny,
+        TOutputSchema extends z.ZodType = z.ZodAny,
+        THandlerOutput extends z.infer<TOutputSchema> = z.infer<TOutputSchema>,
     >(
         queueName: TQueueName,
         definition: Omit<
-            MutationDefinition<TBaseContext, TSchema, TPath, TInput, TOutput>,
+            MutationDefinition<
+                TBaseContext,
+                TSchema,
+                TPath,
+                TInput,
+                TOutputSchema,
+                THandlerOutput
+            >,
             '_type' | '_context' | '_schema'
         >,
-    ) => MutationDefinition<TBaseContext, TSchema, TPath, TInput, TOutput>
+    ) => MutationDefinition<
+        TBaseContext,
+        TSchema,
+        TPath,
+        TInput,
+        TOutputSchema,
+        THandlerOutput
+    >
 
     /**
      * Defines a query and registers it with the application.
@@ -235,14 +256,29 @@ export type AppDefinition<
         TQueueName extends keyof TQueues,
         TPath extends string,
         TInput extends z.ZodType = z.ZodNull,
-        TOutput extends z.ZodType = z.ZodAny,
+        TOutputSchema extends z.ZodType = z.ZodAny,
+        THandlerOutput extends z.infer<TOutputSchema> = z.infer<TOutputSchema>,
     >(
         queueName: TQueueName,
         definition: Omit<
-            QueryDefinition<TBaseContext, TSchema, TPath, TInput, TOutput>,
+            QueryDefinition<
+                TBaseContext,
+                TSchema,
+                TPath,
+                TInput,
+                TOutputSchema,
+                THandlerOutput
+            >,
             '_type' | '_context' | '_schema'
         >,
-    ) => QueryDefinition<TBaseContext, TSchema, TPath, TInput, TOutput>
+    ) => QueryDefinition<
+        TBaseContext,
+        TSchema,
+        TPath,
+        TInput,
+        TOutputSchema,
+        THandlerOutput
+    >
 
     // --- Internal properties for type inference ---
     readonly _queues: TQueues
