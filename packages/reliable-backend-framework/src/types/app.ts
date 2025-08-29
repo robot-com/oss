@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: It is required for the type inference */
 import type z from 'zod'
 import type { DbTx, MiddlewareFn, MutationDefinition, QueryDefinition, QueuesConfig, Scheduler } from './core'
 import type { PathToParams } from './path-to-params'

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: It is required for the type inference */
 import type { Msg as NatsMsg } from '@nats-io/nats-core'
 import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
