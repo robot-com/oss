@@ -15,7 +15,11 @@ import type { PathToParams } from './path-to-params'
  * Represents the configuration for a single queue.
  * Reserved for future enhancements like middleware.
  */
-export type QueueConfig = {}
+export type QueueConfig = {
+    streamName?: string
+    consumerName?: string
+    subject?: string
+}
 
 /**
  * A type alias for the specific Drizzle transaction object that will be passed

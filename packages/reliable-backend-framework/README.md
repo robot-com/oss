@@ -275,7 +275,7 @@ import { app } from './app'; // Assuming `app` is the definition with auth middl
 import { z } from 'zod';
 
 export const createUser = app.mutation('jobs', {
-  path: 'users-create',
+  path: 'users.create',
   input: z.object({
     email: z.string().email(),
     name: z.string(),
