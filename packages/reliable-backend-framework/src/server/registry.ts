@@ -1,5 +1,9 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: Required for type inference */
-import type { MutationDefinition, QueryDefinition } from '../types'
+import type {
+    MutationDefinition,
+    ProcedureDefinition,
+    QueryDefinition,
+} from '../types'
 
 /** A generic type representing any mutation definition. */
 type GenericMutation = MutationDefinition<
@@ -30,6 +34,12 @@ interface Node {
     query: GenericQuery | null
     /** The mutation definition if this node represents a complete mutation path. */
     mutation: GenericMutation | null
+}
+
+export type MatchResult = {
+    params: string[]
+    definition: ProcedureDefinition
+    type: 'query' | 'mutation'
 }
 
 /**
@@ -150,14 +160,7 @@ export class Registry {
      * @returns An object containing the matched definition and any captured
      *          parameter values, or null if no match is found.
      */
-    match(
-        path: string,
-    ):
-        | ({ params: string[] } & (
-              | { mutation: GenericMutation }
-              | { query: GenericQuery }
-          ))
-        | null {
+    match(path: string): MatchResult | null {
         const segments = path.split('.')
         const params: string[] = []
         let currentNode = this.root
@@ -182,11 +185,15 @@ export class Registry {
         }
 
         if (currentNode.query) {
-            return { params, query: currentNode.query }
+            return { params, definition: currentNode.query, type: 'query' }
         }
 
         if (currentNode.mutation) {
-            return { params, mutation: currentNode.mutation }
+            return {
+                params,
+                definition: currentNode.mutation,
+                type: 'mutation',
+            }
         }
 
         // Path is a prefix of a registered path, but not a complete match

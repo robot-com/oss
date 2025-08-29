@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Needed for testing */
+
+import assert from 'node:assert/strict'
 import test from 'node:test'
 import { expectAssignable, expectType } from 'tsd'
 import z from 'zod'
@@ -11,7 +13,7 @@ test('basic', () => {
         },
     })
 
-    const _getRequest = app.query('requests', {
+    const getRequest = app.query('requests', {
         path: 'requests.get',
         handler: async () => {
             return {
@@ -20,7 +22,7 @@ test('basic', () => {
         },
     })
 
-    const _postRequest = app.mutation('requests', {
+    const postRequest = app.mutation('requests', {
         path: 'requests.post',
         handler: async () => {
             return {
@@ -28,6 +30,16 @@ test('basic', () => {
             }
         },
     })
+
+    assert.equal(app._queues.requests, getRequest._queue)
+    assert.equal(app._queues.requests, postRequest._queue)
+    assert.equal(app._context, postRequest._context)
+    assert.equal(app._schema, postRequest._schema)
+    assert.equal(app._middleware, postRequest._middleware)
+    assert.equal(app._middleware, getRequest._middleware)
+    assert.equal(app._middleware, postRequest._middleware)
+
+    assert.equal(app.registry.match('requests.get')?.definition, getRequest)
 })
 
 test('with context', () => {

@@ -185,6 +185,25 @@ export type MutationDefinition<
     readonly _middleware: TMiddleware
 }
 
+export type ProcedureDefinition = {
+    path: string
+    input?: z.ZodType
+    output?: z.ZodType
+    metadata?: Record<string, unknown>
+    handler: (args: {
+        ctx: any
+        db: DrizzleTx<any>
+        scheduler: Scheduler
+        input: z.infer<any>
+        params: PathToParams<any>
+    }) => Promise<any>
+    readonly _type: 'mutation' | 'query'
+    readonly _context: any
+    readonly _schema: any
+    readonly _queue: QueueConfig
+    readonly _middleware: Middleware<any, any, any>
+}
+
 /**
  * The complete, typed definition of a Query.
  * This object is the return type of `app.query()`.
