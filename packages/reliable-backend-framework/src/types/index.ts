@@ -6,6 +6,7 @@ import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import type { PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js'
 import type { z } from 'zod'
+import type { Registry } from '../server/registry'
 import type { PathToParams } from './path-to-params'
 
 // --- Core RBF Primitives ---
@@ -281,11 +282,6 @@ export type AppDefinition<
     TMutationMetadata extends Record<string, unknown> = {},
     TQueryMetadata extends Record<string, unknown> = {},
     TMiddlewareOutputContext = TBaseContext,
-    TMiddleware extends Middleware<
-        TBaseContext,
-        TSchema,
-        TMiddlewareOutputContext
-    > = Middleware<TBaseContext, TSchema, TMiddlewareOutputContext>,
 > = {
     /**
      * Defines a mutation and registers it with the application.
@@ -361,9 +357,31 @@ export type AppDefinition<
         TQueryMetadata
     >
 
+    middleware: <TNewMiddlewareOutputContext>(
+        middleware: Middleware<
+            TMiddlewareOutputContext,
+            TSchema,
+            TNewMiddlewareOutputContext
+        >,
+    ) => AppDefinition<
+        TBaseContext,
+        TSchema,
+        TQueues,
+        TMutationMetadata,
+        TQueryMetadata,
+        TNewMiddlewareOutputContext
+    >
+
     // --- Internal properties for type inference ---
     readonly _queues: TQueues
     readonly _context: TBaseContext
     readonly _schema: TSchema
-    readonly _middleware: TMiddleware
+    readonly _middleware: Middleware<
+        TBaseContext,
+        TSchema,
+        TMiddlewareOutputContext
+    >
+
+    // --- Where the mutations & queries are registered ---
+    registry: Registry
 }
