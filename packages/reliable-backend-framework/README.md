@@ -12,6 +12,7 @@
     *   [Mutations](#mutations)
     *   [Queries](#queries)
     *   [Queues](#queues)
+    *   [Middleware](#middleware)
     *   [The Scheduler](#the-scheduler)
 3.  [Getting Started](#3-getting-started)
     *   [Installation](#installation)
@@ -19,7 +20,7 @@
     *   [Creating and Running the Backend Instance](#creating-and-running-the-backend-instance)
 4.  [API Reference](#4-api-reference)
     *   [`defineBackend<Context, Schema>`](#definebackendcontext-schema)
-    *   [`createBackend(app, options)`](#createbackendapp-options)
+    *   [`app.middleware(handler)`](#appmiddlewarehandler)
     *   [`app.mutation(queueName, definition)`](#appmutationqueuename-definition)
     *   [`app.query(queueName, definition)`](#appqueryqueuename-definition)
     *   [The `backend` Instance](#the-backend-instance)
@@ -36,7 +37,7 @@
 
 ### What is RBF?
 
-The Reliable Backend Framework (RBF) is a TypeScript framework for building robust, scalable, and fault-tolerant server-side applications. It is designed around a core set of primitives (**Mutations**, **Queries**, and **Queues**) that ensure data consistency and operational reliability, even in distributed environments.
+The Reliable Backend Framework (RBF) is a TypeScript framework for building robust, scalable, and fault-tolerant server-side applications. It is designed around a core set of primitives (**Mutations**, **Queries**, **Queues**, and **Middleware**) that ensure data consistency and operational reliability, even in distributed environments.
 
 By leveraging PostgreSQL for transactional integrity and NATS for message passing, RBF provides a simple yet powerful abstraction for complex backend logic.
 
@@ -76,6 +77,12 @@ Queues are the backbone of RBF's communication and workload management. They are
 
 You define queues when you initialize your application. Each queue can have its own configuration, such as middleware for authentication or logging.
 
+### Middleware
+
+Middleware provides a powerful way to run cross-cutting logic before your mutation or query handlers. It allows you to create a pipeline of functions that can inspect requests and augment the `context` object available to subsequent middleware and the final handler.
+
+This is ideal for concerns like authentication, logging, or establishing database connections. Middleware runs inside the same transaction as the handler, ensuring any database reads it performs are consistent with the handler's view of the data.
+
 ### The Scheduler
 
 The `scheduler` is a special object available only within Mutation handlers. It is the interface for defining the side-effects of a mutation. It allows you to schedule follow-up tasks to run immediately after the transaction commits (`enqueue`), at a specific time (`runAt`), after a delay (`runAfter`), or to publish a raw NATS message for maximum flexibility (`publish`).
@@ -92,7 +99,7 @@ npm install @robot.com/reliable-backend-framework zod drizzle-orm postgres nats
 
 ### Defining the Backend
 
-The first step is to define the structure of your application using `defineBackend`. This function types your application and declares its queues.
+The first step is to define the structure of your application using `defineBackend`. This function types your application, declares its queues, and allows you to build a middleware pipeline.
 
 `app.ts`:
 ```ts
@@ -113,8 +120,8 @@ export type AppContext = {
 // 2. Define your Drizzle schema (or import it)
 export type AppSchema = typeof import('./db/schema');
 
-// 3. Define the backend application
-export const app = defineBackend<AppContext, AppSchema>({
+// 3. Define the base backend application
+const baseApp = defineBackend<AppContext, AppSchema>({
   queues: {
     // A queue for handling general jobs
     jobs: {},
@@ -122,6 +129,22 @@ export const app = defineBackend<AppContext, AppSchema>({
     events: {},
   },
 });
+
+// 4. (Optional) Chain middleware to create new, context-aware app definitions
+// This middleware authenticates a user and adds them to the context.
+export const app = baseApp.middleware(async ({ ctx, db, msg }) => {
+  // In a real app, you would decode a token from `msg.headers`
+  const user = { id: 'user_123', name: 'Jane Doe' };
+  return {
+    ctx: {
+      ...ctx,
+      user,
+    },
+  };
+});
+
+// Now, any mutation or query defined with `app` will have `user` in its context.
+// Mutations defined with `baseApp` will not.
 ```
 
 ### Creating and Running the Backend Instance
@@ -185,16 +208,44 @@ Creates an application definition.
 *   **`Context`**: A generic type parameter for the shared context object available in all operations.
 *   **`Schema`**: A generic type parameter for your Drizzle ORM schema.
 *   **`options.queues`**: An object where keys are the names of the queues your application will use. The values are currently empty objects, reserved for future configuration.
+*   **`options.context`**: An optional object that serves as the base context for all operations.
+*   **`options.middleware`**: An optional initial middleware function to run for all operations.
 
-### `createBackend(app, options)`
+### `app.middleware(handler)`
 
-Creates a runnable backend instance from an application definition.
+Chains a new middleware to an existing app definition, returning a *new* app definition with an augmented context type.
 
-*   **`app`**: The application definition returned by `defineBackend`.
-*   **`options`**:
-    *   `context`: The initial context object.
-    *   `db`: A configured Drizzle instance.
-    *   `queues`: An object mapping the queue names from the definition to concrete queue client implementations (e.g., `natsQueue(...)`).
+*   **`handler`**: An async function that receives the current context (`ctx`), the database transaction (`db`), and the raw NATS message (`msg`). It must return an object with a `ctx` property containing the new, augmented context.
+
+**Example:**
+
+```ts
+// baseApp has a context of type { logger: ... }
+const baseApp = defineBackend({
+  context: { logger },
+  queues: { jobs: {} },
+});
+
+// appWithOrg has a context of type { logger: ..., org: { id: string } }
+const appWithOrg = baseApp.middleware(async ({ ctx }) => {
+  return {
+    ctx: {
+      ...ctx,
+      org: { id: 'org_123' },
+    },
+  };
+});
+
+// appWithUser has a context of type { logger: ..., org: ..., user: ... }
+const appWithUser = appWithOrg.middleware(async ({ ctx }) => {
+  return {
+    ctx: {
+      ...ctx,
+      user: { id: 'user_456' },
+    },
+  };
+});
+```
 
 ### `app.mutation(queueName, definition)`
 
@@ -206,7 +257,7 @@ Defines a mutation and registers it with the application.
     *   `input`: An optional Zod schema for validating the incoming message payload. Defaults to `z.null()`.
     *   `output`: An optional Zod schema for validating the return value of the handler.
     *   `handler`: The async function containing the business logic. It receives a single object argument with the following properties:
-        *   `ctx`: The shared application context.
+        *   `ctx`: The shared application context. Its type is determined by the initial context and any chained middleware.
         *   `db`: The Drizzle `PgTransaction` instance for this operation.
         *   `scheduler`: An object with methods to manage side-effects and control flow:
             *   `enqueue`: Schedules a task to run immediately after the current transaction commits.
@@ -220,7 +271,7 @@ Defines a mutation and registers it with the application.
 **Example:**
 
 ```ts
-import { app, AppContext } from './app';
+import { app } from './app'; // Assuming `app` is the definition with auth middleware
 import { z } from 'zod';
 
 export const createUser = app.mutation('jobs', {
@@ -233,7 +284,8 @@ export const createUser = app.mutation('jobs', {
     id: z.string(),
   }),
   handler: async ({ ctx, db, scheduler, input, params }) => {
-    ctx.logger.info(`Creating user ${input.name}`);
+    // `ctx.user` is available and typed here because of the middleware
+    ctx.logger.info(`Creating user ${input.name} by ${ctx.user.name}`);
 
     const [newUser] = await db
       .insert(users)
@@ -258,7 +310,7 @@ const sendWelcomeEmail = app.mutation(/* ... */);
 Defines a query. The API is nearly identical to `app.mutation`, with a few key differences in the handler.
 
 *   **`handler`**: The handler function receives an object with:
-    *   `ctx`: The context.
+    *   `ctx`: The context, augmented by any middleware.
     *   `db`: The read-only `PgTransaction` instance.
     *   `input`: The validated input.
     *   `params`: The parsed path parameters.
@@ -388,12 +440,11 @@ RBF 1.0.0 provides a solid foundation for building reliable applications. Our vi
 
 ### Developer Experience & Advanced Patterns
 
-*   **Middleware:**
-    *   Introduce a middleware system to run cross-cutting logic for all operations on a specific queue. This would be ideal for:
-        *   **Authentication & Authorization:** Validating a user token from message headers and attaching the user object to the context.
-        *   **Logging:** Creating a request-specific logger.
-        *   **Distributed Tracing:** Initializing a trace span and adding it to the context.
-    *   Middleware would run inside the same transaction as the handler, ensuring any database reads it performs are consistent with the handler's view of the data.
+*   **Enhanced Middleware System:**
+    *   A basic middleware system has been implemented for augmenting context. Future enhancements include:
+        *   **Error Handling:** Introduce dedicated error handling within middleware.
+        *   **Lifecycle Hooks:** Provide hooks that can run after a handler has completed (e.g., for logging results or cleaning up resources).
+        *   **Richer Middleware Input:** Expose more request metadata to the middleware handler.
 
 *   **Dedicated Testing Library:**
     *   Release a `@robot.com/rbf-testing` package with utilities to simplify testing, including a mock `scheduler` for asserting on enqueued tasks, an in-memory queue implementation, and helpers for constructing test contexts.
