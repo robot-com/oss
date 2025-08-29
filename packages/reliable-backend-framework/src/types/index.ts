@@ -142,6 +142,7 @@ export type QueryHandlerArgs<
  */
 export type MutationDefinition<
     TContext,
+    TMiddlewareOutputContext,
     TSchema extends Record<string, unknown>,
     TPath extends string,
     TInput extends z.ZodType = z.ZodNull,
@@ -151,6 +152,11 @@ export type MutationDefinition<
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
     TMetadata extends Record<string, unknown> = {},
     TQueue extends QueueConfig = QueueConfig,
+    TMiddleware extends Middleware<
+        TContext,
+        TSchema,
+        TMiddlewareOutputContext
+    > = Middleware<TContext, TSchema, TMiddlewareOutputContext>,
 > = {
     /** The addressable path for this mutation, e.g., 'users.create'. */
     path: TPath
@@ -162,7 +168,12 @@ export type MutationDefinition<
     metadata?: TMetadata
     /** The business logic for the mutation. */
     handler: (
-        args: MutationHandlerArgs<TContext, TSchema, TPath, TInput>,
+        args: MutationHandlerArgs<
+            TMiddlewareOutputContext,
+            TSchema,
+            TPath,
+            TInput
+        >,
     ) => Promise<THandlerOutput>
 
     // --- Internal properties for type inference ---
@@ -170,6 +181,7 @@ export type MutationDefinition<
     readonly _context: TContext
     readonly _schema: TSchema
     readonly _queue: TQueue
+    readonly _middleware: TMiddleware
 }
 
 /**
@@ -178,6 +190,7 @@ export type MutationDefinition<
  */
 export type QueryDefinition<
     TContext,
+    TMiddlewareOutputContext,
     TSchema extends Record<string, unknown>,
     TPath extends string,
     TInput extends z.ZodType = z.ZodNull,
@@ -187,6 +200,11 @@ export type QueryDefinition<
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
     TMetadata extends Record<string, unknown> = {},
     TQueue extends QueueConfig = QueueConfig,
+    TMiddleware extends Middleware<
+        TContext,
+        TSchema,
+        TMiddlewareOutputContext
+    > = Middleware<TContext, TSchema, TMiddlewareOutputContext>,
 > = {
     /** The addressable path for this query, e.g., 'users.get.$userId'. */
     path: TPath
@@ -198,7 +216,12 @@ export type QueryDefinition<
     metadata?: TMetadata
     /** The business logic for the query. */
     handler: (
-        args: QueryHandlerArgs<TContext, TSchema, TPath, TInput>,
+        args: QueryHandlerArgs<
+            TMiddlewareOutputContext,
+            TSchema,
+            TPath,
+            TInput
+        >,
     ) => Promise<THandlerOutput>
 
     // --- Internal properties for type inference ---
@@ -206,7 +229,39 @@ export type QueryDefinition<
     readonly _context: TContext
     readonly _schema: TSchema
     readonly _queue: TQueue
+    readonly _middleware: TMiddleware
 }
+
+// --- Middleware ---
+
+/**
+ * The arguments object passed to a mutation handler.
+ */
+export type MiddlewareHandlerArgs<
+    TContext,
+    TSchema extends Record<string, unknown>,
+> = {
+    /** The shared application context. */
+    ctx: TContext
+    /** A Drizzle transaction instance, scoped to this mutation. */
+    db: DrizzleTx<TSchema>
+    /** The scheduler for enqueuing atomic side-effects. */
+    scheduler: Scheduler
+    /** The validated and parsed input payload for the mutation or query. */
+    input: unknown
+    /** An object containing parameters parsed from the mutation's path. */
+    params: string[]
+    /** The type of the operation. */
+    type: 'mutation' | 'query'
+}
+
+export type Middleware<
+    TContext,
+    TSchema extends Record<string, unknown>,
+    TOutputContext,
+> = (
+    opts: MiddlewareHandlerArgs<TContext, TSchema>,
+) => Promise<{ ctx: TOutputContext }>
 
 // --- Main App Definition ---
 
@@ -220,11 +275,17 @@ export type QueryDefinition<
  * @template TQueues A record defining the available message queues.
  */
 export type AppDefinition<
-    TBaseContext extends object = {},
+    TBaseContext = {},
     TSchema extends Record<string, unknown> = {},
     TQueues extends Record<string, QueueConfig> = {},
     TMutationMetadata extends Record<string, unknown> = {},
     TQueryMetadata extends Record<string, unknown> = {},
+    TMiddlewareOutputContext = TBaseContext,
+    TMiddleware extends Middleware<
+        TBaseContext,
+        TSchema,
+        TMiddlewareOutputContext
+    > = Middleware<TBaseContext, TSchema, TMiddlewareOutputContext>,
 > = {
     /**
      * Defines a mutation and registers it with the application.
@@ -242,6 +303,7 @@ export type AppDefinition<
         definition: Omit<
             MutationDefinition<
                 TBaseContext,
+                TMiddlewareOutputContext,
                 TSchema,
                 TPath,
                 TInput,
@@ -249,10 +311,11 @@ export type AppDefinition<
                 THandlerOutput,
                 TMutationMetadata
             >,
-            '_type' | '_context' | '_schema' | '_queue'
+            '_type' | '_context' | '_schema' | '_queue' | '_middleware'
         >,
     ) => MutationDefinition<
         TBaseContext,
+        TMiddlewareOutputContext,
         TSchema,
         TPath,
         TInput,
@@ -277,6 +340,7 @@ export type AppDefinition<
         definition: Omit<
             QueryDefinition<
                 TBaseContext,
+                TMiddlewareOutputContext,
                 TSchema,
                 TPath,
                 TInput,
@@ -284,10 +348,11 @@ export type AppDefinition<
                 THandlerOutput,
                 TQueryMetadata
             >,
-            '_type' | '_context' | '_schema' | '_queue'
+            '_type' | '_context' | '_schema' | '_queue' | '_middleware'
         >,
     ) => QueryDefinition<
         TBaseContext,
+        TMiddlewareOutputContext,
         TSchema,
         TPath,
         TInput,
@@ -300,4 +365,5 @@ export type AppDefinition<
     readonly _queues: TQueues
     readonly _context: TBaseContext
     readonly _schema: TSchema
+    readonly _middleware: TMiddleware
 }

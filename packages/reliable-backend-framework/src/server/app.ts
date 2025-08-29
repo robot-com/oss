@@ -1,26 +1,39 @@
+/** biome-ignore-all lint/complexity/noBannedTypes: Needed for type inference */
 import z from 'zod'
-import type { AppDefinition, QueueConfig } from '../types'
+import type { AppDefinition, Middleware, QueueConfig } from '../types'
 
 function defineBackend<
-    TBaseContext extends object = {},
+    TBaseContext = {},
     TSchema extends Record<string, unknown> = {},
     TQueues extends Record<string, QueueConfig> = {},
     TMutationMetadata extends Record<string, unknown> = {},
     TQueryMetadata extends Record<string, unknown> = {},
+    TMiddlewareOutputContext = TBaseContext,
+    TMiddleware extends Middleware<
+        TBaseContext,
+        TSchema,
+        TMiddlewareOutputContext
+    > = Middleware<TBaseContext, TSchema, TMiddlewareOutputContext>,
 >(opts: {
     schema?: TSchema
     context?: TBaseContext
     queues: TQueues
+    middleware?: TMiddleware
 }): AppDefinition<
     TBaseContext,
     TSchema,
     TQueues,
     TMutationMetadata,
-    TQueryMetadata
+    TQueryMetadata,
+    TMiddlewareOutputContext,
+    TMiddleware
 > {
     // TODO: ...
     const context = opts.context ?? ({} as TBaseContext)
     const schema = opts.schema ?? ({} as TSchema)
+    const middleware =
+        opts.middleware ??
+        ((() => ({ ctx: context })) as unknown as TMiddleware)
 
     return {
         _queues: opts.queues,
@@ -33,6 +46,7 @@ function defineBackend<
                 _schema: schema,
                 _type: 'mutation',
                 _queue: opts.queues[queueName],
+                _middleware: middleware,
             } as const
 
             // TODO: Register query
@@ -46,12 +60,14 @@ function defineBackend<
                 _schema: schema,
                 _type: 'query',
                 _queue: opts.queues[queueName],
+                _middleware: middleware,
             } as const
 
             // TODO: Register query
 
             return query
         },
+        _middleware: middleware,
     }
 }
 
