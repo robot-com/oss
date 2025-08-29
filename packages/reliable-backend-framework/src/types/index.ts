@@ -150,6 +150,7 @@ export type MutationDefinition<
     // type inferred from the TOutput schema. This enables inference.
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
     TMetadata extends Record<string, unknown> = {},
+    TQueue extends QueueConfig = QueueConfig,
 > = {
     /** The addressable path for this mutation, e.g., 'users.create'. */
     path: TPath
@@ -168,6 +169,7 @@ export type MutationDefinition<
     readonly _type: 'mutation'
     readonly _context: TContext
     readonly _schema: TSchema
+    readonly _queue: TQueue
 }
 
 /**
@@ -184,6 +186,7 @@ export type QueryDefinition<
     // type inferred from the TOutput schema. This enables inference.
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
     TMetadata extends Record<string, unknown> = {},
+    TQueue extends QueueConfig = QueueConfig,
 > = {
     /** The addressable path for this query, e.g., 'users.get.$userId'. */
     path: TPath
@@ -202,6 +205,7 @@ export type QueryDefinition<
     readonly _type: 'query'
     readonly _context: TContext
     readonly _schema: TSchema
+    readonly _queue: TQueue
 }
 
 // --- Main App Definition ---
@@ -245,7 +249,7 @@ export type AppDefinition<
                 THandlerOutput,
                 TMutationMetadata
             >,
-            '_type' | '_context' | '_schema'
+            '_type' | '_context' | '_schema' | '_queue'
         >,
     ) => MutationDefinition<
         TBaseContext,
@@ -280,7 +284,7 @@ export type AppDefinition<
                 THandlerOutput,
                 TQueryMetadata
             >,
-            '_type' | '_context' | '_schema'
+            '_type' | '_context' | '_schema' | '_queue'
         >,
     ) => QueryDefinition<
         TBaseContext,
