@@ -26,9 +26,9 @@
 5.  [Advanced Topics](#5-advanced-topics)
     *   [Atomicity & The Transactional Outbox Pattern](#atomicity--the-transactional-outbox-pattern)
     *   [Idempotency and Deduplication](#idempotency-and-deduplication)
-    *   [Middleware](#middleware)
     *   [Interacting with NATS Directly](#interacting-with-nats-directly)
-6.  [Full Example: User Signup Flow](#6-full-example-user-signup-flow)
+6.  [Roadmap & Future Directions](#6-roadmap--future-directions)
+7.  [Full Example: User Signup Flow](#7-full-example-user-signup-flow)
 
 ---
 
@@ -92,7 +92,7 @@ npm install @robot.com/reliable-backend-framework zod drizzle-orm postgres nats
 
 ### Defining the Backend
 
-The first step is to define the structure of your application using `defineBackend`. This function types your application and declares its queues and their associated middleware.
+The first step is to define the structure of your application using `defineBackend`. This function types your application and declares its queues.
 
 `app.ts`:
 ```ts
@@ -117,28 +117,11 @@ export type AppSchema = typeof import('./db/schema');
 export const app = defineBackend<AppContext, AppSchema>({
   queues: {
     // A queue for handling general jobs
-    jobs: {
-      middleware: async (ctx, db, msg) => {
-        // This middleware runs for every message on the 'jobs' queue.
-        // It can be used for authentication, logging, or enriching the context.
-        console.log(`Received job with ID: ${msg.headers?.get('Nats-Msg-Id')}`);
-
-        // You can perform DB lookups here.
-        const user = { id: '1', name: 'John Doe' }; // Example: fetch user
-
-        // Return a new context that will be passed to the handler.
-        return { ...ctx, user };
-      },
-    },
-    // A queue for domain events, with no middleware
+    jobs: {},
+    // A queue for domain events
     events: {},
   },
 });
-
-// Define a type for the enriched context after middleware
-export type JobsContext = Awaited<
-  ReturnType<typeof app.queues.jobs.middleware>
->;
 ```
 
 ### Creating and Running the Backend Instance
@@ -201,8 +184,7 @@ Creates an application definition.
 
 *   **`Context`**: A generic type parameter for the shared context object available in all operations.
 *   **`Schema`**: A generic type parameter for your Drizzle ORM schema.
-*   **`options.queues`**: An object where keys are queue names and values are queue definitions. A queue definition can contain:
-    *   `middleware`: An optional async function that runs before the handler. It receives `(ctx: Context, db: PgTransaction, msg: Message)` and must return a new context object.
+*   **`options.queues`**: An object where keys are the names of the queues your application will use. The values are currently empty objects, reserved for future configuration.
 
 ### `createBackend(app, options)`
 
@@ -224,7 +206,7 @@ Defines a mutation and registers it with the application.
     *   `input`: An optional Zod schema for validating the incoming message payload. Defaults to `z.null()`.
     *   `output`: An optional Zod schema for validating the return value of the handler.
     *   `handler`: The async function containing the business logic. It receives a single object argument with the following properties:
-        *   `ctx`: The context, potentially enriched by middleware.
+        *   `ctx`: The shared application context.
         *   `db`: The Drizzle `PgTransaction` instance for this operation.
         *   `scheduler`: An object with methods to manage side-effects and control flow:
             *   `enqueue`: Schedules a task to run immediately after the current transaction commits.
@@ -238,7 +220,7 @@ Defines a mutation and registers it with the application.
 **Example:**
 
 ```ts
-import { app, JobsContext } from './app';
+import { app, AppContext } from './app';
 import { z } from 'zod';
 
 export const createUser = app.mutation('jobs', {
@@ -251,7 +233,6 @@ export const createUser = app.mutation('jobs', {
     id: z.string(),
   }),
   handler: async ({ ctx, db, scheduler, input, params }) => {
-    // ctx is of type JobsContext here, because it's on the 'jobs' queue
     ctx.logger.info(`Creating user ${input.name}`);
 
     const [newUser] = await db
@@ -344,18 +325,17 @@ RBF's core reliability promise is achieved through the **Transactional Outbox pa
 Here is the lifecycle of a mutation with a scheduled task:
 
 1.  A `SERIALIZABLE` database transaction is started.
-2.  The queue's middleware runs inside this transaction.
-3.  The mutation's handler logic runs.
-4.  When `scheduler.enqueue()` is called, it **does not** immediately publish to NATS. Instead, it inserts a record representing the message into a special `rbf_outbox` table within the same database transaction.
-5.  The handler completes, and its result is saved to a `rbf_results` table, also within the transaction.
-6.  The database transaction is committed. At this point, the changes to your business tables, the outbox message, and the result are all atomically and durably saved.
-7.  **After the commit succeeds**, a background process in RBF:
+2.  The mutation's handler logic runs.
+3.  When `scheduler.enqueue()` is called, it **does not** immediately publish to NATS. Instead, it inserts a record representing the message into a special `rbf_outbox` table within the same database transaction.
+4.  The handler completes, and its result is saved to a `rbf_results` table, also within the transaction.
+5.  The database transaction is committed. At this point, the changes to your business tables, the outbox message, and the result are all atomically and durably saved.
+6.  **After the commit succeeds**, a background process in RBF:
     a. Reads the message from the `rbf_outbox` table.
     b. Publishes it to the NATS stream.
     c. Upon receiving confirmation from NATS, it deletes the message from the `rbf_outbox` table.
 
 **Failure Recovery:**
-*   If the application crashes after step 6 but before 7c, the message remains in the `rbf_outbox` table. A background "sweeper" process will periodically scan this table for orphaned messages and republish them, guaranteeing at-least-once delivery.
+*   If the application crashes after step 5 but before 6c, the message remains in the `rbf_outbox` table. A background "sweeper" process will periodically scan this table for orphaned messages and republish them, guaranteeing at-least-once delivery.
 
 ### Idempotency and Deduplication
 
@@ -366,16 +346,6 @@ To prevent processing the same message twice, RBF employs several layers of prot
 3.  **Immediate Reply:** If a result is found, it means the mutation has already been successfully processed. The framework skips execution entirely and immediately returns the stored result.
 
 This ensures that even if NATS delivers a message multiple times due to network issues or retries, the mutation's logic will only execute once.
-
-### Middleware
-
-Middleware provides a powerful way to run cross-cutting logic for all operations on a specific queue. It's ideal for:
-
-*   **Authentication & Authorization:** Validating a user token from message headers and attaching the user object to the context.
-*   **Logging:** Creating a request-specific logger.
-*   **Distributed Tracing:** Initializing a trace span and adding it to the context.
-
-Since middleware runs inside the same transaction as the handler, any database reads it performs are consistent with the handler's view of the data.
 
 ### Interacting with NATS Directly
 
@@ -418,6 +388,13 @@ RBF 1.0.0 provides a solid foundation for building reliable applications. Our vi
 
 ### Developer Experience & Advanced Patterns
 
+*   **Middleware:**
+    *   Introduce a middleware system to run cross-cutting logic for all operations on a specific queue. This would be ideal for:
+        *   **Authentication & Authorization:** Validating a user token from message headers and attaching the user object to the context.
+        *   **Logging:** Creating a request-specific logger.
+        *   **Distributed Tracing:** Initializing a trace span and adding it to the context.
+    *   Middleware would run inside the same transaction as the handler, ensuring any database reads it performs are consistent with the handler's view of the data.
+
 *   **Dedicated Testing Library:**
     *   Release a `@robot.com/rbf-testing` package with utilities to simplify testing, including a mock `scheduler` for asserting on enqueued tasks, an in-memory queue implementation, and helpers for constructing test contexts.
 
@@ -449,7 +426,7 @@ RBF 1.0.0 provides a solid foundation for building reliable applications. Our vi
 
 `mutations.ts`:
 ```ts
-import { app, JobsContext } from './app';
+import { app, AppContext } from './app';
 import { z } from 'zod';
 import { users } from './db/schema';
 
@@ -477,8 +454,7 @@ export const createUser = app.mutation('jobs', {
     email: z.string(),
   }),
   handler: async ({ ctx, db, scheduler, input }) => {
-    // The middleware on the 'jobs' queue already ran, so ctx.user exists.
-    ctx.logger.info(`User ${ctx.user.name} is creating a new user: ${input.name}`);
+    ctx.logger.info(`Creating a new user: ${input.name}`);
 
     // Check for existing user
     const existing = await db.query.users.findFirst({
