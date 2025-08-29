@@ -149,6 +149,7 @@ export type MutationDefinition<
     // The actual type returned by the handler. It must be assignable to the
     // type inferred from the TOutput schema. This enables inference.
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
+    TMetadata extends Record<string, unknown> = {},
 > = {
     /** The addressable path for this mutation, e.g., 'users.create'. */
     path: TPath
@@ -156,6 +157,8 @@ export type MutationDefinition<
     input?: TInput
     /** An optional Zod schema for validating the return value. */
     output?: TOutput
+    /** An optional metadata object for the mutation. */
+    metadata?: TMetadata
     /** The business logic for the mutation. */
     handler: (
         args: MutationHandlerArgs<TContext, TSchema, TPath, TInput>,
@@ -180,6 +183,7 @@ export type QueryDefinition<
     // The actual type returned by the handler. It must be assignable to the
     // type inferred from the TOutput schema. This enables inference.
     THandlerOutput extends z.infer<TOutput> = z.infer<TOutput>,
+    TMetadata extends Record<string, unknown> = {},
 > = {
     /** The addressable path for this query, e.g., 'users.get.$userId'. */
     path: TPath
@@ -187,6 +191,8 @@ export type QueryDefinition<
     input?: TInput
     /** An optional Zod schema for validating the return value. */
     output?: TOutput
+    /** An optional metadata object for the query. */
+    metadata?: TMetadata
     /** The business logic for the query. */
     handler: (
         args: QueryHandlerArgs<TContext, TSchema, TPath, TInput>,
@@ -213,6 +219,8 @@ export type AppDefinition<
     TBaseContext extends object = {},
     TSchema extends Record<string, unknown> = {},
     TQueues extends Record<string, QueueConfig> = {},
+    TMutationMetadata extends Record<string, unknown> = {},
+    TQueryMetadata extends Record<string, unknown> = {},
 > = {
     /**
      * Defines a mutation and registers it with the application.
@@ -234,7 +242,8 @@ export type AppDefinition<
                 TPath,
                 TInput,
                 TOutputSchema,
-                THandlerOutput
+                THandlerOutput,
+                TMutationMetadata
             >,
             '_type' | '_context' | '_schema'
         >,
@@ -244,7 +253,8 @@ export type AppDefinition<
         TPath,
         TInput,
         TOutputSchema,
-        THandlerOutput
+        THandlerOutput,
+        TMutationMetadata
     >
 
     /**
@@ -267,7 +277,8 @@ export type AppDefinition<
                 TPath,
                 TInput,
                 TOutputSchema,
-                THandlerOutput
+                THandlerOutput,
+                TQueryMetadata
             >,
             '_type' | '_context' | '_schema'
         >,
@@ -277,7 +288,8 @@ export type AppDefinition<
         TPath,
         TInput,
         TOutputSchema,
-        THandlerOutput
+        THandlerOutput,
+        TQueryMetadata
     >
 
     // --- Internal properties for type inference ---
