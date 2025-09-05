@@ -26,3 +26,19 @@ type ExtractParamKeys<T extends string> = {
 export type PathToParams<T extends string> = {
     [K in ExtractParamKeys<T>]: string
 }
+
+export function buildPath(
+    path: string,
+    params: Record<string, string>,
+): string {
+    const getParam = (key: string) => {
+        const value = params[key]
+        if (!value) {
+            throw new Error(`Missing parameter: ${key}`)
+        }
+
+        return value
+    }
+
+    return path.replace(/\$([a-zA-Z0-9_]+)/g, (_, key) => getParam(key))
+}

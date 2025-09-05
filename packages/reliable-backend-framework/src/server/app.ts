@@ -76,22 +76,22 @@ export function defineBackend<
     }
 }
 
-const backend = defineBackend({
-    queues: {
-        jobs: {},
-    },
-    context: {
-        env: 'production' as const,
-    },
-    middleware: async (args) => {
-        return {
-            ctx: {
-                user: {
-                    id: '123',
-                    name: 'John Doe',
-                },
-                ...args.ctx,
-            },
-        }
-    },
-})
+// const backend = defineBackend({
+//     queues: {
+//         jobs: {},
+//     },
+//     context: {
+//         env: 'production' as const,
+//     },
+//     middleware: async (args) => {
+//         return {
+//             ctx: {
+//                 user: {
+//                     id: '123',
+//                     name: 'John Doe',
+//                 },
+//                 ...args.ctx,
+//             },
+//         }
+//     },
+// })

@@ -26,6 +26,7 @@
     *   [The `backend` Instance](#the-backend-instance)
 5.  [Advanced Topics](#5-advanced-topics)
     *   [Atomicity & The Transactional Outbox Pattern](#atomicity--the-transactional-outbox-pattern)
+    *   [Core Reliability Tables](#core-reliability-tables)
     *   [Idempotency and Deduplication](#idempotency-and-deduplication)
     *   [Interacting with NATS Directly](#interacting-with-nats-directly)
 6.  [Roadmap & Future Directions](#6-roadmap--future-directions)
@@ -388,6 +389,68 @@ Here is the lifecycle of a mutation with a scheduled task:
 
 **Failure Recovery:**
 *   If the application crashes after step 5 but before 6c, the message remains in the `rbf_outbox` table. A background "sweeper" process will periodically scan this table for orphaned messages and republish them, guaranteeing at-least-once delivery.
+
+### Core Reliability Tables
+
+The transactional outbox and idempotency mechanisms are powered by two tables that RBF manages within your application's database. You will need to create these tables using a migration tool.
+
+#### The `rbf_outbox` Table
+
+This table is the heart of the transactional outbox pattern. When `scheduler.enqueue()` or a similar method is called, a row is inserted into this table as part of the same transaction as your business logic. A separate background process reads from this table and publishes the messages to NATS *after* the transaction has been successfully committed.
+
+**Schema:**
+
+```sql
+CREATE TABLE rbf_outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject TEXT NOT NULL,
+    payload JSONB,
+    headers JSONB,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, published, failed
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    scheduled_for TIMESTAMPTZ NOT NULL DEFAULT now(),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_rbf_outbox_pending ON rbf_outbox (scheduled_for) WHERE status = 'pending';
+```
+
+**Column Explanations:**
+
+*   `id`: A unique identifier for the outbox entry.
+*   `subject`: The NATS subject the message will be published to.
+*   `payload`: The JSON body of the message to be sent.
+*   `headers`: A JSON object containing the NATS headers for the message.
+*   `status`: The state of the message (`pending`, `published`, `failed`). The background publisher only processes `pending` messages.
+*   `created_at`: Timestamp of when the message was first scheduled.
+*   `scheduled_for`: The time at which the message should be published. For `enqueue`, this is `now()`. For `runAt` or `runAfter`, this is a future timestamp.
+*   `attempt_count`: The number of times the background publisher has tried to send this message.
+*   `last_attempt_at`: The timestamp of the last publication attempt, used for backoff logic.
+
+#### The `rbf_results` Table
+
+This table is used to ensure idempotency. Before executing a mutation, the framework checks this table for a row matching the incoming message's `RBF-Request-Id`. If a result is found, it is returned immediately without re-running the handler. If not, the handler runs, and its result is stored here upon successful completion of the transaction.
+
+**Schema:**
+
+```sql
+CREATE TABLE rbf_results (
+    request_id TEXT PRIMARY KEY,
+    result JSONB,
+    status TEXT NOT NULL, -- success, error
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ
+);
+```
+
+**Column Explanations:**
+
+*   `request_id`: The unique identifier for the incoming request, taken from the `RBF-Request-Id` header. This is the primary key and the basis for deduplication.
+*   `result`: The JSON-encoded return value of the mutation handler. If the handler threw an error, this might store error details.
+*   `status`: The final status of the operation (`success` or `error`).
+*   `created_at`: Timestamp of when the result was stored.
+*   `expires_at`: An optional timestamp after which the result can be purged to save space.
 
 ### Idempotency and Deduplication
 

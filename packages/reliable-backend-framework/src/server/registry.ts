@@ -37,7 +37,7 @@ interface Node {
 }
 
 export type MatchResult = {
-    params: string[]
+    params: Record<string, string>
     definition: ProcedureDefinition
     type: 'query' | 'mutation'
 }
@@ -52,7 +52,7 @@ export type MatchResult = {
  * const registry = new Registry();
  * registry.addQuery({ path: 'api.users.get.$id', ... });
  * const match = registry.match('api.users.get.123');
- * // match will be { params: ['123'], query: { ... } }
+ * // match will be { params: { id: '123' }, query: { ... } }
  */
 export class Registry {
     /** The root node of the routing tree. */
@@ -162,7 +162,7 @@ export class Registry {
      */
     match(path: string): MatchResult | null {
         const segments = path.split('.')
-        const params: string[] = []
+        const params: Record<string, string> = {}
         let currentNode = this.root
 
         for (const segment of segments) {
@@ -175,7 +175,9 @@ export class Registry {
 
             // Fallback to parameter match
             if (currentNode.paramChild) {
-                params.push(segment)
+                if (currentNode.paramName) {
+                    params[currentNode.paramName] = segment
+                }
                 currentNode = currentNode.paramChild
                 continue
             }

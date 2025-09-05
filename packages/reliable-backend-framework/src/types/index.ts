@@ -274,7 +274,7 @@ export type MiddlewareHandlerArgs<
     /** The validated and parsed input payload for the mutation or query. */
     input: unknown
     /** An object containing parameters parsed from the mutation's path. */
-    params: string[]
+    params: Record<string, string>
     /** The type of the operation. */
     type: 'mutation' | 'query'
 }

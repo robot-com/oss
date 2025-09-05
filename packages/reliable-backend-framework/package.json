@@ -19,6 +19,7 @@
         "@nats-io/nats-core": "^3.0.2",
         "@whatwg-node/server": "^0.10.6",
         "drizzle-orm": "^0.44.4",
+        "uuid": "^11.1.0",
         "zod": "^3.24.4"
     },
     "devDependencies": {
