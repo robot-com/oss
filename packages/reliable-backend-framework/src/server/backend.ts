@@ -212,11 +212,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
         const { promise, resolve, reject } = Promise.withResolvers<T>()
 
-        const { promise: abortPromise, reject: abortReject } =
-            Promise.withResolvers<void>()
-
         options.signal?.addEventListener('abort', () => {
-            abortReject()
+            reject(new RBFError('ABORTED', 'Request was aborted'))
         })
 
         this.pendingRequests.set(requestId, { resolve, reject })
@@ -234,7 +231,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             },
         )
 
-        return (await Promise.any([promise, abortPromise])) as T
+        return promise as T
     }
 
     async requestWithRetries<T = any>(

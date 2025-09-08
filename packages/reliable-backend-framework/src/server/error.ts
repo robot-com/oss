@@ -8,6 +8,7 @@ export type RBFErrorCode =
     | 'NOT_FOUND'
     | 'CONFLICT'
     | 'INTERNAL_SERVER_ERROR'
+    | 'ABORTED'
 
 const RBF_ERROR_CODE_TO_HTTP_STATUS: Record<RBFErrorCode, number> = {
     BAD_REQUEST: 400,
@@ -16,6 +17,7 @@ const RBF_ERROR_CODE_TO_HTTP_STATUS: Record<RBFErrorCode, number> = {
     NOT_FOUND: 404,
     CONFLICT: 409,
     INTERNAL_SERVER_ERROR: 500,
+    ABORTED: 499,
 }
 
 export class RBFError extends Error {
