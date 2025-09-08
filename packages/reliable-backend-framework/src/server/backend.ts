@@ -13,6 +13,7 @@ import type {
     QueueConfig,
 } from '../types'
 import { buildPath, type PathToParams } from '../types/path-to-params'
+import { RBFError } from './error'
 import { handleMessage } from './handle-message'
 
 // type NonEmptyString = string & {
@@ -42,13 +43,16 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
     app: TApp
     db: PostgresJsDatabase<TApp['_schema']>
     nats: NatsConnection
-    private jetstreamClient: JetStreamClient
+    jetstreamClient: JetStreamClient
+    subjectPrefix: string
     private streamNamePrefix: string
     private consumerNamePrefix: string
-    private subjectPrefix: string
     private abortController: AbortController | null = null
     private inboxAddress: string
-    private pendingRequests: Map<string, (data: any) => void> = new Map()
+    private pendingRequests: Map<
+        string,
+        { resolve: (data: any) => void; reject: (error: RBFError) => void }
+    > = new Map()
     private pendingPromises: Set<Promise<unknown>> = new Set()
 
     onError?: (error: Error) => void
@@ -63,6 +67,51 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.streamNamePrefix = opts.jetstream?.streamNamePrefix ?? ''
         this.consumerNamePrefix = opts.jetstream?.consumerNamePrefix ?? ''
         this.subjectPrefix = opts.jetstream?.subjectPrefix ?? ''
+    }
+
+    private async startInbox(): Promise<void> {
+        const sub = this.nats.subscribe(`${this.inboxAddress}.*`)
+
+        this.abortController!.signal.addEventListener('abort', () => {
+            sub.unsubscribe()
+        })
+
+        for await (const msg of sub) {
+            if (msg.subject.startsWith(this.inboxAddress)) {
+                const requestId = msg.subject.slice(
+                    this.inboxAddress.length + 1,
+                )
+
+                const req = this.pendingRequests.get(requestId)
+
+                if (!req) {
+                    continue
+                }
+
+                const statusCode = msg.headers?.get('Status-Code')
+                if (!statusCode) {
+                    req.reject(
+                        new RBFError(
+                            'INTERNAL_SERVER_ERROR',
+                            'Missing Status-Code header',
+                        ),
+                    )
+                }
+
+                const data = msg.json() as any
+
+                if (statusCode !== '200') {
+                    req.reject(
+                        new RBFError(
+                            data.code ?? 'INTERNAL_SERVER_ERROR',
+                            data.message ?? 'Internal server error',
+                        ),
+                    )
+                }
+
+                req.resolve(data)
+            }
+        }
     }
 
     private async startQueue(
@@ -110,11 +159,13 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         }
 
         this.abortController = new AbortController()
+
+        this.startInbox()
         Object.entries(this.app._queues as Record<string, QueueConfig>).forEach(
             ([defaultName, queue]) => {
-                const streamName = `${this.streamNamePrefix}${queue.streamName ?? defaultName}`
-                const consumerName = `${this.consumerNamePrefix}${queue.consumerName ?? queue.streamName ?? defaultName}`
-                const subject = `${this.subjectPrefix}${queue.subject ?? ''}`
+                const streamName = `${this.streamNamePrefix ?? ''}${queue.streamName ?? defaultName}`
+                const consumerName = `${this.consumerNamePrefix ?? ''}${queue.consumerName ?? queue.streamName ?? defaultName}`
+                const subject = `${this.subjectPrefix ?? ''}${queue.subject ?? ''}`
 
                 const startQueuePromise = this.startQueue(
                     streamName,
@@ -155,19 +206,20 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             headers?: Record<string, string>
         },
     ): Promise<T> {
-        const fullTopic = `${this.subjectPrefix}${topic}`
+        const fullTopic = `${this.subjectPrefix ?? ''}${topic}`
 
         const requestId = options.requestId ?? uuidv7()
 
-        const { promise, resolve } = Promise.withResolvers<T>()
+        const { promise, resolve, reject } = Promise.withResolvers<T>()
 
-        const { promise: abortPromise, reject } = Promise.withResolvers<void>()
+        const { promise: abortPromise, reject: abortReject } =
+            Promise.withResolvers<void>()
 
         options.signal?.addEventListener('abort', () => {
-            reject()
+            abortReject()
         })
 
-        this.pendingRequests.set(requestId, resolve)
+        this.pendingRequests.set(requestId, { resolve, reject })
 
         const h = headers()
 
@@ -176,7 +228,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
         await this.jetstreamClient.publish(
             fullTopic,
-            JSON.stringify(options.input),
+            JSON.stringify(options.input ?? null),
             {
                 headers: h,
             },
@@ -244,7 +296,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             : Awaited<ReturnType<T['handler']>>
     > {
         const path = buildPath(query.path, options.params ?? {})
-        const topic = `${query._queue.subject}${path}`
+        const topic = `${query._queue.subject}.${path}`
         return await this.requestWithRetries(topic, {
             input: options.input,
             headers: options.headers,
@@ -274,7 +326,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             : Awaited<ReturnType<T['handler']>>
     > {
         const path = buildPath(query.path, options.params ?? {})
-        const topic = `${query._queue.subject}${path}`
+        const topic = `${query._queue.subject}.${path}`
         return await this.requestWithRetries(topic, {
             input: options.input,
             headers: options.headers,

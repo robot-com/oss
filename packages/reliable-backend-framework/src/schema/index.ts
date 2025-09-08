@@ -4,32 +4,28 @@ import {
     jsonb,
     pgTable,
     text,
-    timestamp,
     uuid,
 } from 'drizzle-orm/pg-core'
 
 export const rbf_outbox = pgTable('rbf_outbox', {
     id: uuid('id').defaultRandom().primaryKey(),
-    subject: text('subject').notNull(),
-    payload: jsonb('payload').notNull(),
-    headers: jsonb('headers').notNull(),
-    status: text('status').notNull().default('pending'),
+    source_request_id: text('source_request_id').notNull(),
+    type: text('type', { enum: ['request', 'message'] }).notNull(),
+    path: text('path').notNull(),
+    data: jsonb('data').notNull(),
+    target_at: bigint('target_at', { mode: 'number' }),
     created_at: bigint('created_at', { mode: 'number' })
-        .notNull()
-        .$defaultFn(() => Date.now()),
-    scheduled_for: bigint('scheduled_for', { mode: 'number' })
-        .notNull()
-        .$defaultFn(() => Date.now()),
-    attempt_count: integer('attempt_count').notNull().default(0),
-    last_attempt_at: bigint('last_attempt_at', { mode: 'number' })
         .notNull()
         .$defaultFn(() => Date.now()),
 })
 
 export const rbf_results = pgTable('rbf_results', {
     request_id: text('request_id').primaryKey(),
-    result: jsonb('result').notNull(),
-    status: text('status').notNull(),
-    created_at: timestamp('created_at').notNull().defaultNow(),
-    expires_at: timestamp('expires_at'),
+    requested_path: text('requested_path').notNull(),
+    requested_input: text('requested_input').notNull(),
+    data: jsonb('data').notNull(),
+    status: integer('status').notNull(),
+    created_at: bigint('created_at', { mode: 'number' })
+        .notNull()
+        .$defaultFn(() => Date.now()),
 })

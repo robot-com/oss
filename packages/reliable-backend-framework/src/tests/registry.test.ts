@@ -16,7 +16,7 @@ test('Registry: Basic Operations', async (t) => {
 
         const match = registry.match('api.users.list')
         assert.notEqual(match, null)
-        assert.deepStrictEqual(match?.params, [])
+        assert.deepStrictEqual(match?.params, {})
         assert.strictEqual(match?.definition, queryDef)
         assert.strictEqual(match?.type, 'query')
     })
@@ -28,7 +28,7 @@ test('Registry: Basic Operations', async (t) => {
 
         const match = registry.match('api.users.create')
         assert.notEqual(match, null)
-        assert.deepStrictEqual(match?.params, [])
+        assert.deepStrictEqual(match?.params, {})
         assert.strictEqual(match?.definition, mutationDef)
         assert.strictEqual(match?.type, 'mutation')
     })
@@ -81,7 +81,7 @@ test('Registry: Parameter Matching', async (t) => {
 
         const match = registry.match('users.get.123')
         assert.notEqual(match, null)
-        assert.deepStrictEqual(match?.params, ['123'])
+        assert.deepStrictEqual(match?.params, { id: '123' })
         assert.strictEqual(match?.definition, queryDef)
     })
 
@@ -92,7 +92,10 @@ test('Registry: Parameter Matching', async (t) => {
 
         const match = registry.match('orgs.acme.users.user-456')
         assert.notEqual(match, null)
-        assert.deepStrictEqual(match?.params, ['acme', 'user-456'])
+        assert.deepStrictEqual(match?.params, {
+            orgId: 'acme',
+            userId: 'user-456',
+        })
         assert.strictEqual(match?.definition, queryDef)
     })
 
@@ -105,7 +108,7 @@ test('Registry: Parameter Matching', async (t) => {
 
             const match = registry.match('posts.post-789.comments.list')
             assert.notEqual(match, null)
-            assert.deepStrictEqual(match?.params, ['post-789'])
+            assert.deepStrictEqual(match?.params, { postId: 'post-789' })
             assert.strictEqual(match?.definition, queryDef)
         },
     )
@@ -122,13 +125,13 @@ test('Registry: Parameter Matching', async (t) => {
         const staticMatch = registry.match('users.me')
         assert.notEqual(staticMatch, null)
         assert.strictEqual(staticMatch?.definition, staticDef)
-        assert.deepStrictEqual(staticMatch?.params, [])
+        assert.deepStrictEqual(staticMatch?.params, {})
 
         // Match a dynamic path
         const dynamicMatch = registry.match('users.user-xyz')
         assert.notEqual(dynamicMatch, null)
         assert.strictEqual(dynamicMatch?.definition, dynamicDef)
-        assert.deepStrictEqual(dynamicMatch?.params, ['user-xyz'])
+        assert.deepStrictEqual(dynamicMatch?.params, { id: 'user-xyz' })
     })
 
     await t.test('should handle parameters at the root level', () => {
@@ -138,7 +141,7 @@ test('Registry: Parameter Matching', async (t) => {
 
         const match = registry.match('tenant-1.users.list')
         assert.notEqual(match, null)
-        assert.deepStrictEqual(match?.params, ['tenant-1'])
+        assert.deepStrictEqual(match?.params, { tenantId: 'tenant-1' })
         assert.strictEqual(match?.definition, queryDef)
     })
 })
@@ -231,7 +234,7 @@ test('Registry: Error Handling and Conflicts', async (t) => {
 
             const match = registry.match('users.123.settings')
             assert.notEqual(match, null)
-            assert.deepStrictEqual(match?.params, ['123'])
+            assert.deepStrictEqual(match?.params, { id: '123' })
         },
     )
 })

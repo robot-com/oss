@@ -18,7 +18,7 @@ import type { PathToParams } from './path-to-params'
 export type QueueConfig = {
     streamName?: string
     consumerName?: string
-    subject?: string
+    subject: string
 }
 
 /**
@@ -35,11 +35,12 @@ export type DrizzleTx<TSchema extends Record<string, unknown>> = PgTransaction<
  * The options object passed to a scheduled task.
  * It is strongly typed based on the definition of the mutation being scheduled.
  */
-type EnqueueOptions<TDef extends MutationDefinition<any, any, any, any, any>> =
-    {
-        input: z.infer<TDef['input']>
-        // `params` could be added here if the framework supports scheduling with dynamic paths
-    }
+export type EnqueueOptions<
+    TDef extends MutationDefinition<any, any, any, any, any>,
+> = {
+    input: z.infer<TDef['input']>
+    params: PathToParams<TDef['path']>
+}
 
 /**
  * The scheduler object, available only within mutation handlers.

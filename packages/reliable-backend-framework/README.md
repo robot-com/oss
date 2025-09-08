@@ -410,7 +410,8 @@ CREATE TABLE rbf_outbox (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     scheduled_for TIMESTAMPTZ NOT NULL DEFAULT now(),
     attempt_count INTEGER NOT NULL DEFAULT 0,
-    last_attempt_at TIMESTAMPTZ
+    last_attempt_at TIMESTAMPTZ,
+    source_request_id TEXT -- The ID of the request that generated this message
 );
 
 CREATE INDEX idx_rbf_outbox_pending ON rbf_outbox (scheduled_for) WHERE status = 'pending';
@@ -427,6 +428,7 @@ CREATE INDEX idx_rbf_outbox_pending ON rbf_outbox (scheduled_for) WHERE status =
 *   `scheduled_for`: The time at which the message should be published. For `enqueue`, this is `now()`. For `runAt` or `runAfter`, this is a future timestamp.
 *   `attempt_count`: The number of times the background publisher has tried to send this message.
 *   `last_attempt_at`: The timestamp of the last publication attempt, used for backoff logic.
+*   `source_request_id`: The `RBF-Request-Id` of the mutation that created this outbox message, used for tracing and recovery.
 
 #### The `rbf_results` Table
 
@@ -438,7 +440,9 @@ This table is used to ensure idempotency. Before executing a mutation, the frame
 CREATE TABLE rbf_results (
     request_id TEXT PRIMARY KEY,
     result JSONB,
-    status TEXT NOT NULL, -- success, error
+    status_code INTEGER NOT NULL,
+    requested_path TEXT NOT NULL,
+    requested_input JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ
 );
@@ -448,7 +452,9 @@ CREATE TABLE rbf_results (
 
 *   `request_id`: The unique identifier for the incoming request, taken from the `RBF-Request-Id` header. This is the primary key and the basis for deduplication.
 *   `result`: The JSON-encoded return value of the mutation handler. If the handler threw an error, this might store error details.
-*   `status`: The final status of the operation (`success` or `error`).
+*   `status_code`: The final HTTP-like status code of the operation (e.g., 200 for success, 400 for bad request).
+*   `requested_path`: The NATS subject of the original request. Used to prevent request ID collisions.
+*   `requested_input`: The JSON payload of the original request. Used to prevent request ID collisions.
 *   `created_at`: Timestamp of when the result was stored.
 *   `expires_at`: An optional timestamp after which the result can be purged to save space.
 
