@@ -70,7 +70,6 @@ export async function handleMessage(
     subjectPrefix: string,
 ): Promise<void> {
     const match = matchProcedure(backend, subjectPrefix, message)
-
     const requestId = message.headers?.get('Request-Id') || null
 
     if (!match || !requestId) {
@@ -169,7 +168,7 @@ export async function handleMessage(
                 }
             }
 
-            const ctx = await match.definition._middleware({
+            const { ctx } = await match.definition._middleware({
                 ctx: backend.app._context,
                 db: tx,
                 scheduler: null as unknown as Scheduler,
@@ -188,13 +187,22 @@ export async function handleMessage(
                 })
                 .then(async (data) => {
                     if (match.definition._type === 'mutation') {
-                        await tx.insert(rbf_results).values({
-                            request_id: requestId,
-                            requested_path: message.subject,
-                            requested_input: JSON.stringify(input),
-                            data,
-                            status: 200,
-                        })
+                        const r = await tx
+                            .insert(rbf_results)
+                            .values({
+                                request_id: requestId,
+                                requested_path: message.subject,
+                                requested_input: JSON.stringify(input),
+                                data,
+                                status: 200,
+                            })
+                            .onConflictDoNothing()
+                            .returning()
+
+                        if (r.length === 0) {
+                            message.nak()
+                            throw new Error('Failed to save result')
+                        }
 
                         if (scheduler.queue.length > 0) {
                             await tx.insert(rbf_outbox).values(
@@ -214,7 +222,7 @@ export async function handleMessage(
 
                     if (error.code === 'INTERNAL_SERVER_ERROR') {
                         // Log the error and return a generic error response
-                        console.error('Internal Server Error:', error)
+                        backend.onError?.(error)
                         message.nak()
                         throw error
                     }
@@ -243,6 +251,7 @@ export async function handleMessage(
             return result
         },
         {
+            isolationLevel: 'serializable',
             accessMode:
                 match.definition._type === 'query' ? 'read only' : 'read write',
         },

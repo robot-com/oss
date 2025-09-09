@@ -300,6 +300,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             signal: options.signal,
             retries: options.retries,
             timeout: options.timeout,
+            requestId: options.requestId,
         })
     }
 
@@ -330,6 +331,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             signal: options.signal,
             retries: options.retries,
             timeout: options.timeout,
+            requestId: options.requestId,
         })
     }
 }

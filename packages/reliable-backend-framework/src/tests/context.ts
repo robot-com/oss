@@ -1,15 +1,16 @@
 import { after } from 'node:test'
-import { PGlite } from '@electric-sql/pglite'
 import { connect } from '@nats-io/transport-node'
-import { pgTable, text } from 'drizzle-orm/pg-core'
-import { drizzle } from 'drizzle-orm/pglite'
+import { integer, pgTable, text } from 'drizzle-orm/pg-core'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
 import { createQueue } from '../helpers'
 import * as schema from '../schema'
 
 export const posts = pgTable('posts', {
     id: text('id').notNull(),
     name: text('name').notNull(),
+    views: integer('views').default(0).notNull(),
 })
 
 export async function createTestContext() {
@@ -18,32 +19,35 @@ export async function createTestContext() {
         token: process.env.NATS_TOKEN,
     })
 
-    const client = new PGlite()
+    const client = postgres(process.env.DATABASE_URL!)
 
-    const db = drizzle(client, { schema: { ...schema, posts } })
+    const mergedSchema = { ...schema, posts } as const
 
-    await client.query(`CREATE TABLE rbf_outbox (
+    const db = drizzle(client, { schema: mergedSchema })
+
+    await client.unsafe(`CREATE TABLE IF NOT EXISTS rbf_outbox (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_request_id TEXT NOT NULL,
         type TEXT NOT NULL CHECK (type IN ('request', 'message')),
         path TEXT NOT NULL,
-        data JSONB NOT NULL,
+        data JSONB,
         target_at BIGINT,
         created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT
     );`)
 
-    await client.query(`CREATE TABLE rbf_results (
+    await client.unsafe(`CREATE TABLE IF NOT EXISTS rbf_results (
         request_id TEXT PRIMARY KEY,
         requested_path TEXT NOT NULL,
         requested_input TEXT NOT NULL,
-        data JSONB NOT NULL,
+        data JSONB,
         status INTEGER NOT NULL,
         created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT
     );`)
 
-    await client.query(`CREATE TABLE posts (
+    await client.unsafe(`CREATE TABLE IF NOT EXISTS posts (
         id TEXT PRIMARY KEY,
-        name TEXT NOT NULL
+        name TEXT NOT NULL,
+        views INTEGER NOT NULL DEFAULT 0
     );`)
 
     await createQueue(nats, {
@@ -53,7 +57,7 @@ export async function createTestContext() {
 
     after(() => {
         nats.close()
-        client.close()
+        client.end()
     })
 
     return { db: db as unknown as PostgresJsDatabase, nats }

@@ -7,6 +7,7 @@ export async function createQueue(
         streamName: string
         consumerName?: string
         subject: string
+        maxDeliver?: number
     },
 ) {
     const jsm = await jetstreamManager(nc)
@@ -30,5 +31,6 @@ export async function createQueue(
     await jsm.consumers.add(opts.streamName, {
         durable_name: opts.consumerName ?? opts.streamName,
         ack_policy: 'explicit',
+        max_deliver: opts.maxDeliver ?? 10,
     })
 }
