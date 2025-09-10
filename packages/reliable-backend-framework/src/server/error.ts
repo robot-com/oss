@@ -9,6 +9,8 @@ export type RBFErrorCode =
     | 'CONFLICT'
     | 'INTERNAL_SERVER_ERROR'
     | 'ABORTED'
+    | 'REQUEST_ID_CONFLICT'
+    | 'CONCURRENCY_CONFLICT'
 
 const RBF_ERROR_CODE_TO_HTTP_STATUS: Record<RBFErrorCode, number> = {
     BAD_REQUEST: 400,
@@ -16,6 +18,8 @@ const RBF_ERROR_CODE_TO_HTTP_STATUS: Record<RBFErrorCode, number> = {
     FORBIDDEN: 403,
     NOT_FOUND: 404,
     CONFLICT: 409,
+    REQUEST_ID_CONFLICT: 409,
+    CONCURRENCY_CONFLICT: 500,
     INTERNAL_SERVER_ERROR: 500,
     ABORTED: 499,
 }

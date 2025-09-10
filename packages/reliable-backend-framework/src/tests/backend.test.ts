@@ -7,6 +7,7 @@ import { v7 } from 'uuid'
 import { defineBackend } from '../server/app'
 import { Backend } from '../server/backend'
 import { RBFError } from '../server/error'
+import { createConsoleLogger } from '../types/logger'
 import { createTestContext, posts } from './context'
 
 const { db, nats } = await createTestContext()
@@ -30,7 +31,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -63,7 +68,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -101,7 +110,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -128,7 +141,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -161,7 +178,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -207,7 +228,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -260,7 +285,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -282,6 +311,41 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             .from(posts)
             .where(eq(posts.id, postId))
         assert.strictEqual(finalPost.views, 1) // Assert it only ran once
+    })
+
+    await t.test('middleware correctly augments context', async () => {
+        const baseApp = defineBackend({
+            queues: {
+                requests: { subject: 'requests' },
+            },
+        })
+
+        const appWithUser = baseApp.middleware(async () => {
+            return {
+                ctx: {
+                    user: { id: 'user_123' },
+                },
+            }
+        })
+
+        const getContextUser = appWithUser.query('requests', {
+            path: 'context.user.get',
+            handler: async ({ ctx }) => {
+                assert.deepStrictEqual(ctx.user, { id: 'user_123' })
+                return ctx.user
+            },
+        })
+
+        const backend = new Backend(appWithUser, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
+        backend.start()
+        after(() => backend.stop())
+
+        const user = await backend.query(getContextUser, {})
+        assert.deepStrictEqual(user, { id: 'user_123' })
     })
 
     await t.test('transactional outbox enqueue success', async () => {
@@ -315,6 +379,7 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
                 await db
                     .insert(posts)
                     .values({ id: postId1, name: 'First Post' })
+
                 scheduler.enqueue(createSecondPost, {
                     input: undefined,
                     params: {},
@@ -323,7 +388,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -362,18 +431,30 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             },
         })
 
+        let touch = false
+
         const createFirstPostAndFail = app.mutation('requests', {
             path: 'posts.create.first.fail',
             handler: async ({ db, scheduler }) => {
                 await db
                     .insert(posts)
                     .values({ id: postId1, name: 'First Post' })
-                scheduler.enqueue(createSecondPost, {})
+                scheduler.enqueue(createSecondPost, {
+                    input: null,
+                    params: {},
+                })
+
+                touch = true
+
                 throw new Error('Intentional failure to trigger rollback')
             },
         })
 
-        const backend = new Backend(app, { db, nats })
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
         backend.start()
         after(() => backend.stop())
 
@@ -384,53 +465,17 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
         // Give some time to ensure the message is NOT processed
         await new Promise((resolve) => setTimeout(resolve, 500))
 
-        const post1 = await db.query.posts.findFirst({
-            where: eq(posts.id, postId1),
-        })
-        const post2 = await db.query.posts.findFirst({
-            where: eq(posts.id, postId2),
-        })
+        const r = await db
+            .select()
+            .from(posts)
+            .where(inArray(posts.id, [postId1, postId2]))
 
-        assert.strictEqual(
-            post1,
-            undefined,
-            'First post should not exist due to rollback',
+        assert.equal(r.length, 0, 'No posts should exist')
+
+        assert.equal(
+            touch,
+            true,
+            'The mutation handler should have been invoked',
         )
-        assert.strictEqual(
-            post2,
-            undefined,
-            'Second post should not exist as it was never enqueued',
-        )
-    })
-
-    await t.test('middleware correctly augments context', async () => {
-        const baseApp = defineBackend({
-            queues: {
-                requests: { subject: 'requests' },
-            },
-        })
-
-        const appWithUser = baseApp.middleware(async () => {
-            return {
-                ctx: {
-                    user: { id: 'user_123' },
-                },
-            }
-        })
-
-        const getContextUser = appWithUser.query('requests', {
-            path: 'context.user.get',
-            handler: async ({ ctx }) => {
-                assert.deepStrictEqual(ctx.user, { id: 'user_123' })
-                return ctx.user
-            },
-        })
-
-        const backend = new Backend(appWithUser, { db, nats })
-        backend.start()
-        after(() => backend.stop())
-
-        const user = await backend.query(getContextUser, {})
-        assert.deepStrictEqual(user, { id: 'user_123' })
     })
 })

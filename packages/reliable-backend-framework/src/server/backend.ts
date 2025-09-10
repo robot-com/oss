@@ -12,6 +12,7 @@ import type {
     QueryDefinition,
     QueueConfig,
 } from '../types'
+import type { Logger } from '../types/logger'
 import { buildPath, type PathToParams } from '../types/path-to-params'
 import { RBFError } from './error'
 import { handleMessage } from './handle-message'
@@ -37,6 +38,7 @@ export type BackendOptions<
     nats: NatsConnection
     jetstream?: JetstreamConfig
     inboxAddress?: string
+    logger?: Logger
 }
 
 export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
@@ -55,7 +57,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
     > = new Map()
     private pendingPromises: Set<Promise<unknown>> = new Set()
 
-    onError?: (error: Error) => void
+    logger?: Logger
 
     constructor(app: TApp, opts: BackendOptions<TApp['_schema']>) {
         this.app = app
@@ -67,6 +69,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.streamNamePrefix = opts.jetstream?.streamNamePrefix ?? ''
         this.consumerNamePrefix = opts.jetstream?.consumerNamePrefix ?? ''
         this.subjectPrefix = opts.jetstream?.subjectPrefix ?? ''
+
+        this.logger = opts.logger
     }
 
     private async startInbox(): Promise<void> {
@@ -140,8 +144,14 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             }
 
             const handleMessagePromise = handleMessage(this, m, subject).catch(
-                (error) => {
-                    this.onError?.(error)
+                (e) => {
+                    const error = RBFError.from(e)
+                    const requestId = m.headers?.get('Request-Id') || null
+                    this.logger?.onHandleMessageError?.({
+                        error,
+                        queueSubject: subject,
+                        requestId,
+                    })
                 },
             )
 
@@ -173,7 +183,12 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
                     subject,
                 ).catch((error) => {
                     this.abortController?.abort()
-                    this.onError?.(error)
+                    this.logger?.onStartQueueError?.({
+                        streamName,
+                        consumerName,
+                        subject,
+                        error,
+                    })
                 })
 
                 this.pendingPromises.add(startQueuePromise)

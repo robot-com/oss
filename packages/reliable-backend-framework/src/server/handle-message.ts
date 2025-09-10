@@ -72,6 +72,13 @@ export async function handleMessage(
     const match = matchProcedure(backend, subjectPrefix, message)
     const requestId = message.headers?.get('Request-Id') || null
 
+    backend.logger?.onMessage?.({
+        match,
+        requestId,
+        msg: message,
+        queueSubject: subjectPrefix,
+    })
+
     if (!match || !requestId) {
         replyMessage(backend.nats, message, {
             data: null,
@@ -86,7 +93,7 @@ export async function handleMessage(
 
     try {
         input = message.json()
-    } catch (_) {
+    } catch (error) {
         replyMessage(backend.nats, message, {
             data: {
                 error: 'BAD_REQUEST',
@@ -96,6 +103,15 @@ export async function handleMessage(
             requestId,
         })
         message.ack()
+
+        backend.logger?.onMessageBadRequest?.({
+            requestId,
+            queueSubject: subjectPrefix,
+            msg: message,
+            match,
+            error: error instanceof Error ? error : new Error(String(error)),
+        })
+
         return
     }
 
@@ -121,11 +137,19 @@ export async function handleMessage(
                     // If the requested path or input is different, we need to handle it
                     replyMessage(backend.nats, message, {
                         data: {
-                            error: 'INVALID_REQUEST',
+                            error: 'REQUEST_ID_CONFLICT',
                         },
                         statusCode: 409,
                         requestId,
                     })
+
+                    backend.logger?.onRequestIdConflict?.({
+                        requestId,
+                        queueSubject: subjectPrefix,
+                        msg: message,
+                        match,
+                    })
+
                     shortCircuit = true
                 } else {
                     // If the requested path and input are the same, we can use the existing response
@@ -135,6 +159,15 @@ export async function handleMessage(
                         requestId,
                     })
                     shortCircuit = true
+
+                    backend.logger?.onReplyExistingResponse?.({
+                        requestId,
+                        queueSubject: subjectPrefix,
+                        msg: message,
+                        match,
+                        data: existingResponse.data,
+                        statusCode: existingResponse.status,
+                    })
 
                     const pendingMessages = await tx
                         .select()
@@ -152,7 +185,7 @@ export async function handleMessage(
 
                             return backend.jetstreamClient.publish(
                                 msg.path,
-                                JSON.stringify(msg.data),
+                                JSON.stringify(msg.data) ?? 'null',
                                 {
                                     headers: h,
                                 },
@@ -200,8 +233,20 @@ export async function handleMessage(
                             .returning()
 
                         if (r.length === 0) {
-                            message.nak()
-                            throw new Error('Failed to save result')
+                            message.nak(scheduler.retryDelay)
+
+                            backend.logger?.onSaveResultFailed?.({
+                                requestId,
+                                queueSubject: subjectPrefix,
+                                msg: message,
+                                match,
+                                data: existingResponse.data,
+                            })
+
+                            throw new RBFError(
+                                'CONCURRENCY_CONFLICT',
+                                'Failed to save result due to concurrency conflict',
+                            )
                         }
 
                         if (scheduler.queue.length > 0) {
@@ -222,8 +267,7 @@ export async function handleMessage(
 
                     if (error.code === 'INTERNAL_SERVER_ERROR') {
                         // Log the error and return a generic error response
-                        backend.onError?.(error)
-                        message.nak()
+                        message.nak(scheduler.retryDelay)
                         throw error
                     }
 
@@ -241,6 +285,16 @@ export async function handleMessage(
                         data: error.data,
                         statusCode: error.statusCode,
                         requestId,
+                    })
+
+                    backend.logger?.onReplyNewResponse?.({
+                        requestId,
+                        data: error.data,
+                        statusCode: error.statusCode,
+                        error,
+                        match,
+                        msg: message,
+                        queueSubject: subjectPrefix,
                     })
 
                     shortCircuit = true
@@ -269,6 +323,16 @@ export async function handleMessage(
         requestId,
     })
 
+    backend.logger?.onReplyNewResponse?.({
+        requestId,
+        queueSubject: subjectPrefix,
+        msg: message,
+        match,
+        data: result,
+        statusCode: 200,
+        error: null,
+    })
+
     if (match.definition._type === 'mutation') {
         await Promise.all(
             scheduler.queue.map((item) => {
@@ -279,7 +343,7 @@ export async function handleMessage(
 
                 return backend.jetstreamClient.publish(
                     item.path,
-                    JSON.stringify(item.data),
+                    JSON.stringify(item.data) ?? 'null',
                     {
                         headers: h,
                     },
