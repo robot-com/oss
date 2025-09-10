@@ -69,6 +69,16 @@ export async function handleMessage(
     message: JsMsg,
     subjectPrefix: string,
 ): Promise<void> {
+    const targetAtStr = message.headers?.get('Target-At') || null
+    if (targetAtStr) {
+        const targetAt = Number.parseInt(targetAtStr, 10)
+
+        if (Number.isInteger(targetAt) && Date.now() < targetAt) {
+            message.nak(targetAt - Date.now())
+            return
+        }
+    }
+
     const match = matchProcedure(backend, subjectPrefix, message)
     const requestId = message.headers?.get('Request-Id') || null
 
@@ -181,6 +191,13 @@ export async function handleMessage(
 
                             if (msg.type === 'request') {
                                 h.append('Request-Id', msg.id)
+
+                                if (msg.target_at) {
+                                    h.append(
+                                        'Target-At',
+                                        msg.target_at.toString(),
+                                    )
+                                }
                             }
 
                             return backend.jetstreamClient.publish(
@@ -339,6 +356,10 @@ export async function handleMessage(
                 const h = headers()
                 if (item.type === 'request') {
                     h.append('Request-Id', item.id)
+
+                    if (item.target_at) {
+                        h.append('Target-At', item.target_at.toString())
+                    }
                 }
 
                 return backend.jetstreamClient.publish(
