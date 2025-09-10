@@ -55,9 +55,9 @@ export async function createTestContext() {
         subject: 'requests',
     })
 
-    after(() => {
-        nats.close()
-        client.end()
+    after(async () => {
+        await nats.close()
+        await client.end()
     })
 
     return { db: db as unknown as PostgresJsDatabase, nats }

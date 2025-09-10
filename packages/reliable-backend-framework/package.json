@@ -6,7 +6,7 @@
     "private": true,
     "no-publish": true,
     "scripts": {
-        "test": "node --env-file .env --import tsx --test ./src/**/*.test.ts",
+        "test": "node --env-file .env --import tsx --trace-warnings --test ./src/**/*.test.ts",
         "build": "node ../build-package",
         "publish": "node ../publish-package"
     },

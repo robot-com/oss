@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Needed for testing */
 
 import assert from 'node:assert'
-import test, { after } from 'node:test'
+import test from 'node:test'
 import { eq, inArray } from 'drizzle-orm'
 import { v7 } from 'uuid'
 import { defineBackend } from '../server/app'
@@ -11,6 +11,10 @@ import { createConsoleLogger } from '../types/logger'
 import { createTestContext, posts } from './context'
 
 const { db, nats } = await createTestContext()
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+})
 
 await test('backend tests sequentially', { concurrency: false }, async (t) => {
     await t.test('basic query', async () => {
@@ -37,10 +41,16 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const r = await backend.query(getRequest, {})
         assert.strictEqual(r.id, '123')
+
+        await backend.stop()
     })
 
     await t.test('basic mutation', async () => {
@@ -74,13 +84,19 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const r = await backend.mutate(postRequest, {})
         assert.strictEqual(r.id, postId)
 
         const [post] = await db.select().from(posts).where(eq(posts.id, postId))
         assert.strictEqual(post.id, postId)
+
+        await backend.stop()
     })
 
     await t.test('retry once mutation', async () => {
@@ -116,13 +132,19 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const r = await backend.mutate(postRequest, {})
         assert.strictEqual(r.id, postId)
 
         const [post] = await db.select().from(posts).where(eq(posts.id, postId))
         assert.strictEqual(post.id, postId)
+
+        await backend.stop()
     })
 
     await t.test('custom error', async () => {
@@ -147,8 +169,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
-
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
         const r = await backend
             .query(getRequest, {})
             .then(() => {
@@ -157,6 +182,8 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             .catch((e) => e)
 
         assert(r instanceof RBFError)
+
+        await backend.stop()
     })
 
     await t.test('with params', async () => {
@@ -184,7 +211,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const r = await backend.query(getRequest, {
             params: {
@@ -194,6 +225,8 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
         })
 
         assert.strictEqual(r, 'req-123')
+
+        await backend.stop()
     })
 
     await t.test('idempotency with custom request id', async () => {
@@ -234,7 +267,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const requestId = `test-idempotency-${v7()}`
 
@@ -251,6 +288,8 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             .from(posts)
             .where(eq(posts.id, postId))
         assert.strictEqual(finalPost.views, 1) // Assert it only ran once
+
+        await backend.stop()
     })
 
     await t.test('idempotency with concurrent requests', async () => {
@@ -291,7 +330,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const requestId = `test-idempotency-${v7()}`
 
@@ -311,6 +354,8 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             .from(posts)
             .where(eq(posts.id, postId))
         assert.strictEqual(finalPost.views, 1) // Assert it only ran once
+
+        await backend.stop()
     })
 
     await t.test('middleware correctly augments context', async () => {
@@ -342,10 +387,16 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         const user = await backend.query(getContextUser, {})
         assert.deepStrictEqual(user, { id: 'user_123' })
+
+        await backend.stop()
     })
 
     await t.test('transactional outbox enqueue success', async () => {
@@ -394,7 +445,11 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
 
         await backend.mutate(createFirstPost, {})
 
@@ -407,6 +462,8 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             .where(inArray(posts.id, [postId1, postId2]))
 
         assert.equal(r.length, 2, 'Two posts should exist')
+
+        await backend.stop()
     })
 
     await t.test('transactional outbox enqueue rollback', async () => {
@@ -456,14 +513,22 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             logger: createConsoleLogger(),
         })
         backend.start()
-        after(() => backend.stop())
-
-        await backend.mutate(createFirstPostAndFail, {}).catch(() => {
-            // Expected error
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
         })
 
+        try {
+            await backend.mutate(createFirstPostAndFail, {})
+            throw new Error('Expected mutation to fail')
+        } catch (error) {
+            assert(error instanceof RBFError)
+            assert(error.code === 'ABORTED')
+        }
+
         // Give some time to ensure the message is NOT processed
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 5000))
 
         const r = await db
             .select()
@@ -477,5 +542,7 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
             true,
             'The mutation handler should have been invoked',
         )
+
+        await backend.stop()
     })
 })

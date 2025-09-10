@@ -124,7 +124,7 @@ export async function handleMessage(
     let requestId = message.headers?.get('Request-Id') || null
 
     const msgIdHeader = message.headers?.get('Nats-Msg-Id')
-    if (msgIdHeader) {
+    if (!requestId && msgIdHeader) {
         requestId = `Nats-Msg-Id->${msgIdHeader}`
     }
 

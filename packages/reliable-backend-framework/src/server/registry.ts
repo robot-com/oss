@@ -176,7 +176,7 @@ export class Registry {
             // Fallback to parameter match
             if (currentNode.paramChild) {
                 if (currentNode.paramName) {
-                    params[currentNode.paramName] = segment
+                    params[currentNode.paramName] = decodeURIComponent(segment)
                 }
                 currentNode = currentNode.paramChild
                 continue

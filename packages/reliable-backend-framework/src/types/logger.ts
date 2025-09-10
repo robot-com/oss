@@ -1,4 +1,5 @@
 import type { JsMsg } from '@nats-io/jetstream'
+import type { Msg } from '@nats-io/nats-core'
 import type { RBFError } from '../server/error'
 import type { MatchResult } from '../server/registry'
 
@@ -8,6 +9,20 @@ export type Logger = {
         queueSubject: string
         msg: JsMsg
         match: MatchResult | null
+    }) => unknown
+    onRequestResponse?: (params: {
+        requestId: string | null
+        data: unknown
+    }) => unknown
+    onRequestError?: (params: {
+        requestId: string | null
+        error: RBFError
+    }) => unknown
+
+    onInboxMessage?: (params: {
+        requestId: string | null
+        msg: Msg
+        expected: boolean
     }) => unknown
     onReplyExistingResponse?: (params: {
         requestId: string
@@ -70,6 +85,26 @@ function createConsoleLogger(): Logger {
                 queueSubject,
                 subject: msg.subject,
                 match,
+            })
+        },
+        onRequestResponse: ({ requestId, data }) => {
+            console.log('onRequestResponse', {
+                requestId,
+                data,
+            })
+        },
+        onRequestError: ({ requestId, error }) => {
+            console.log('onRequestError', {
+                requestId,
+                error,
+            })
+        },
+
+        onInboxMessage: ({ requestId, msg, expected }) => {
+            console.log('onInboxMessage', {
+                requestId,
+                subject: msg.subject,
+                expected,
             })
         },
         onReplyExistingResponse: ({

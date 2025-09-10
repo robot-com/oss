@@ -37,7 +37,7 @@ export function buildPath(
             throw new Error(`Missing parameter: ${key}`)
         }
 
-        return value
+        return encodeURIComponent(value)
     }
 
     return path.replace(/\$([a-zA-Z0-9_]+)/g, (_, key) => getParam(key))

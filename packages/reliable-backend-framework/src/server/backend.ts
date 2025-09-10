@@ -105,9 +105,17 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
                 const req = this.pendingRequests.get(requestId)
 
+                this.logger?.onInboxMessage?.({
+                    requestId,
+                    msg,
+                    expected: !!req,
+                })
+
                 if (!req) {
                     continue
                 }
+
+                this.pendingRequests.delete(requestId)
 
                 const statusCode = msg.headers?.get('Status-Code')
                 if (!statusCode) {
@@ -117,6 +125,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
                             'Missing Status-Code header',
                         ),
                     )
+
+                    return
                 }
 
                 const data = msg.json() as any
@@ -124,8 +134,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
                 if (statusCode !== '200') {
                     req.reject(
                         new RBFError(
-                            data.code ?? 'INTERNAL_SERVER_ERROR',
-                            data.message ?? 'Internal server error',
+                            data?.code ?? 'INTERNAL_SERVER_ERROR',
+                            data?.message ?? 'Internal server error',
                         ),
                     )
                 }
@@ -180,7 +190,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         }
     }
 
-    private cancellableDelay(ms: number) {
+    private async cancellableDelay(ms: number) {
         if (!this.abortController) {
             return
         }
@@ -189,10 +199,18 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             this.abortController!.signal.addEventListener('abort', () => res()),
         )
 
-        return Promise.any([
-            new Promise((resolve) => setTimeout(resolve, ms)),
+        let timer: NodeJS.Timeout | undefined
+
+        await Promise.any([
+            new Promise((resolve) => {
+                timer = setTimeout(resolve, ms)
+            }),
             signalPromise,
         ])
+
+        if (timer) {
+            clearTimeout(timer)
+        }
     }
 
     private async publishPendingMessages() {
@@ -278,6 +296,14 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         )
     }
 
+    get running(): boolean {
+        return this.abortController !== null
+    }
+
+    get stopped(): boolean {
+        return !this.running
+    }
+
     async stop(): Promise<void> {
         if (!this.abortController) {
             throw new Error('Backend not started')
@@ -286,7 +312,22 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.abortController.abort()
         this.abortController = null
 
-        await Promise.allSettled(this.pendingPromises)
+        for (const promise of [
+            ...this.pendingPromises,
+            Array.from(this.pendingRequests.values()).map((r) => r.promise),
+        ]) {
+            try {
+                await promise
+            } catch (error) {
+                this.logger?.onInternalError?.({
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                    operation: 'stop',
+                })
+            }
+        }
         this.pendingPromises.clear()
     }
 
@@ -303,32 +344,15 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
         const requestId = options.requestId ?? uuidv7()
 
+        const replyId = uuidv7()
+
         const { promise, resolve, reject } = Promise.withResolvers<T>()
 
         options.signal?.addEventListener('abort', () => {
             reject(new RBFError('ABORTED', 'Request was aborted'))
         })
 
-        const existingRequest = this.pendingRequests.get(requestId)
-
-        if (existingRequest) {
-            if (existingRequest.path !== topic) {
-                throw new RBFError(
-                    'REQUEST_ID_CONFLICT',
-                    'Two requests were made with the same ID but different topics',
-                )
-            }
-            if (existingRequest.input !== JSON.stringify(options.input)) {
-                throw new RBFError(
-                    'REQUEST_ID_CONFLICT',
-                    'Two requests were made with the same ID but different input',
-                )
-            }
-
-            return existingRequest.promise as Promise<T>
-        }
-
-        this.pendingRequests.set(requestId, {
+        this.pendingRequests.set(replyId, {
             resolve,
             reject,
             promise,
@@ -339,25 +363,41 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         const h = headers()
 
         h.append('Request-Id', requestId)
-        h.append('Reply-To', `${this.inboxAddress}.${requestId}`)
+        h.append('Reply-To', `${this.inboxAddress}.${replyId}`)
 
         await this.jetstreamClient.publish(
             fullTopic,
             JSON.stringify(options.input ?? null),
             {
-                msgID: `request-id->${requestId}`,
+                msgID: `${this.inboxAddress}.${replyId}`,
                 headers: h,
             },
         )
 
-        return promise as T
+        try {
+            const r = (await promise) as T
+            this.logger?.onRequestResponse?.({
+                requestId,
+                data: r,
+            })
+            return r
+        } catch (error) {
+            this.logger?.onRequestError?.({
+                requestId,
+                error: RBFError.from(error),
+            })
+
+            throw error
+        } finally {
+            this.pendingRequests.delete(replyId)
+        }
     }
 
     async requestWithRetries<T = any>(
         topic: string,
         {
             retries = 3,
-            timeout = 5000,
+            timeout = 10_000,
             ...options
         }: {
             requestId?: string
@@ -377,6 +417,12 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
                     ? AbortSignal.any([options.signal, timeoutSignal])
                     : timeoutSignal
 
+                if (options.signal) {
+                    options.signal.addEventListener('abort', () => {
+                        i = retries
+                    })
+                }
+
                 return await this.request(topic, {
                     ...options,
                     requestId,
@@ -384,6 +430,14 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
                 })
             } catch (error) {
                 if (i === retries - 1) {
+                    throw error
+                }
+
+                if (this.stopped) {
+                    throw error
+                }
+
+                if (error instanceof RBFError && error.statusCode < 499) {
                     throw error
                 }
             }
