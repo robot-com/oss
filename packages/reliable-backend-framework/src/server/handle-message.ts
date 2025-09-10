@@ -149,6 +149,7 @@ export async function handleMessage(
 
     try {
         input = message.json()
+        input = match.definition.input?.parse(input) ?? null
     } catch (error) {
         replyMessage(backend.nats, message, {
             data: {

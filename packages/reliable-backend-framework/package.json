@@ -11,8 +11,9 @@
         "publish": "node ../publish-package"
     },
     "exports": {
-        "./client": "./src/client/index.ts",
-        "./server": "./src/server/index.ts"
+        ".": "./src/server/index.ts",
+        "./schema": "./src/schema/index.ts",
+        "./helpers": "./src/helpers/index.ts"
     },
     "dependencies": {
         "@nats-io/jetstream": "^3.0.2",
