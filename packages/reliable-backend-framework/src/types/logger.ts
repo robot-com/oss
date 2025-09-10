@@ -28,6 +28,7 @@ export type Logger = {
     }) => unknown
 
     // Errors
+    onInternalError?: (params: { error: Error; operation: string }) => unknown
     onMessageBadRequest?: (params: {
         requestId: string
         queueSubject: string
@@ -85,6 +86,9 @@ function createConsoleLogger(): Logger {
                 match,
                 data,
             })
+        },
+        onInternalError: ({ error }) => {
+            console.error('onInternalError', { error })
         },
         onMessageBadRequest: ({
             requestId,

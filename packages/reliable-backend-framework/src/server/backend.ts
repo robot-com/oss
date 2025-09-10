@@ -2,10 +2,12 @@
 
 import { type JetStreamClient, jetstream } from '@nats-io/jetstream'
 import { headers, type NatsConnection } from '@nats-io/nats-core'
+import { inArray, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { v7 as uuidv7 } from 'uuid'
 import type z from 'zod'
 import type { ZodType } from 'zod'
+import { rbf_outbox, rbf_results } from '../schema'
 import type {
     AppDefinition,
     MutationDefinition,
@@ -15,7 +17,7 @@ import type {
 import type { Logger } from '../types/logger'
 import { buildPath, type PathToParams } from '../types/path-to-params'
 import { RBFError } from './error'
-import { handleMessage } from './handle-message'
+import { handleMessage, publishPendingMessages } from './handle-message'
 
 // type NonEmptyString = string & {
 //     readonly NonEmptyString: unique symbol
@@ -39,6 +41,9 @@ export type BackendOptions<
     jetstream?: JetstreamConfig
     inboxAddress?: string
     logger?: Logger
+
+    periodicTasksInterval?: number
+    resultsMaxAge?: number
 }
 
 export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
@@ -53,11 +58,20 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
     private inboxAddress: string
     private pendingRequests: Map<
         string,
-        { resolve: (data: any) => void; reject: (error: RBFError) => void }
+        {
+            resolve: (data: any) => void
+            reject: (error: RBFError) => void
+            path: string
+            input: string
+            promise: Promise<any>
+        }
     > = new Map()
     private pendingPromises: Set<Promise<unknown>> = new Set()
 
     logger?: Logger
+
+    private periodicTasksInterval: number
+    private resultsMaxAge: number
 
     constructor(app: TApp, opts: BackendOptions<TApp['_schema']>) {
         this.app = app
@@ -71,6 +85,9 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.subjectPrefix = opts.jetstream?.subjectPrefix ?? ''
 
         this.logger = opts.logger
+
+        this.periodicTasksInterval = opts.periodicTasksInterval ?? 30_000
+        this.resultsMaxAge = opts.resultsMaxAge ?? 86_400_000
     }
 
     private async startInbox(): Promise<void> {
@@ -163,6 +180,64 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         }
     }
 
+    private cancellableDelay(ms: number) {
+        if (!this.abortController) {
+            return
+        }
+
+        const signalPromise = new Promise<void>((res) =>
+            this.abortController!.signal.addEventListener('abort', () => res()),
+        )
+
+        return Promise.any([
+            new Promise((resolve) => setTimeout(resolve, ms)),
+            signalPromise,
+        ])
+    }
+
+    private async publishPendingMessages() {
+        const messages = await this.db
+            .select()
+            .from(rbf_outbox)
+            .where(lt(rbf_outbox.created_at, Date.now() - 5_000))
+        await publishPendingMessages(this, messages)
+        await this.db.delete(rbf_outbox).where(
+            inArray(
+                rbf_outbox.id,
+                messages.map((m) => m.id),
+            ),
+        )
+    }
+
+    private async deleteExpiredResults() {
+        await this.db
+            .delete(rbf_results)
+            .where(lt(rbf_results.created_at, Date.now() - this.resultsMaxAge))
+    }
+
+    private async startLocalPeriodicTasks() {
+        while (this.abortController && !this.abortController.signal.aborted) {
+            await this.publishPendingMessages().catch((e) =>
+                this.logger?.onInternalError?.({
+                    error: e,
+                    operation: 'publishPendingMessages',
+                }),
+            )
+
+            await this.deleteExpiredResults().catch((e) =>
+                this.logger?.onInternalError?.({
+                    error: e,
+                    operation: 'deleteExpiredResults',
+                }),
+            )
+
+            await this.cancellableDelay(
+                this.periodicTasksInterval +
+                    (Math.random() * this.periodicTasksInterval) / 2,
+            )
+        }
+    }
+
     async start(): Promise<void> {
         if (this.abortController) {
             throw new Error('Backend already started')
@@ -170,7 +245,9 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
         this.abortController = new AbortController()
 
-        this.startInbox()
+        this.pendingPromises.add(this.startInbox())
+        this.pendingPromises.add(this.startLocalPeriodicTasks())
+
         Object.entries(this.app._queues as Record<string, QueueConfig>).forEach(
             ([defaultName, queue]) => {
                 const streamName = `${this.streamNamePrefix ?? ''}${queue.streamName ?? defaultName}`
@@ -210,6 +287,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.abortController = null
 
         await Promise.allSettled(this.pendingPromises)
+        this.pendingPromises.clear()
     }
 
     async request<T = any>(
@@ -231,7 +309,32 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             reject(new RBFError('ABORTED', 'Request was aborted'))
         })
 
-        this.pendingRequests.set(requestId, { resolve, reject })
+        const existingRequest = this.pendingRequests.get(requestId)
+
+        if (existingRequest) {
+            if (existingRequest.path !== topic) {
+                throw new RBFError(
+                    'REQUEST_ID_CONFLICT',
+                    'Two requests were made with the same ID but different topics',
+                )
+            }
+            if (existingRequest.input !== JSON.stringify(options.input)) {
+                throw new RBFError(
+                    'REQUEST_ID_CONFLICT',
+                    'Two requests were made with the same ID but different input',
+                )
+            }
+
+            return existingRequest.promise as Promise<T>
+        }
+
+        this.pendingRequests.set(requestId, {
+            resolve,
+            reject,
+            promise,
+            input: JSON.stringify(options.input),
+            path: topic,
+        })
 
         const h = headers()
 
@@ -242,6 +345,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
             fullTopic,
             JSON.stringify(options.input ?? null),
             {
+                msgID: `request-id->${requestId}`,
                 headers: h,
             },
         )

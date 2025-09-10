@@ -64,6 +64,47 @@ async function replyMessage(
     }
 }
 
+export type PendingMessage = {
+    id: string
+    source_request_id: string
+    type: 'request' | 'message'
+    path: string
+    data: unknown
+    target_at?: number | null
+    created_at?: number
+}
+
+export async function publishPendingMessages(
+    backend: Backend<AppDefinition<any, any, any, any, any, any>>,
+    messages: PendingMessage[],
+) {
+    if (messages.length === 0) {
+        return
+    }
+
+    await Promise.all([
+        messages.map((msg) => {
+            const h = headers()
+
+            if (msg.type === 'request') {
+                h.append('Request-Id', msg.id)
+
+                if (msg.target_at) {
+                    h.append('Target-At', msg.target_at.toString())
+                }
+            }
+
+            return backend.jetstreamClient.publish(
+                msg.path,
+                JSON.stringify(msg.data) ?? 'null',
+                {
+                    headers: h,
+                },
+            )
+        }),
+    ])
+}
+
 export async function handleMessage(
     backend: Backend<AppDefinition<any, any, any, any, any, any>>,
     message: JsMsg,
@@ -80,7 +121,12 @@ export async function handleMessage(
     }
 
     const match = matchProcedure(backend, subjectPrefix, message)
-    const requestId = message.headers?.get('Request-Id') || null
+    let requestId = message.headers?.get('Request-Id') || null
+
+    const msgIdHeader = message.headers?.get('Nats-Msg-Id')
+    if (msgIdHeader) {
+        requestId = `Nats-Msg-Id->${msgIdHeader}`
+    }
 
     backend.logger?.onMessage?.({
         match,
@@ -137,7 +183,6 @@ export async function handleMessage(
                 .select()
                 .from(rbf_results)
                 .where(eq(rbf_results.request_id, requestId))
-                .limit(1)
 
             if (existingResponse) {
                 if (
@@ -183,32 +228,8 @@ export async function handleMessage(
                         .select()
                         .from(rbf_outbox)
                         .where(eq(rbf_outbox.source_request_id, requestId))
-                        .limit(1)
 
-                    await Promise.all([
-                        pendingMessages.map((msg) => {
-                            const h = headers()
-
-                            if (msg.type === 'request') {
-                                h.append('Request-Id', msg.id)
-
-                                if (msg.target_at) {
-                                    h.append(
-                                        'Target-At',
-                                        msg.target_at.toString(),
-                                    )
-                                }
-                            }
-
-                            return backend.jetstreamClient.publish(
-                                msg.path,
-                                JSON.stringify(msg.data) ?? 'null',
-                                {
-                                    headers: h,
-                                },
-                            )
-                        }),
-                    ])
+                    await publishPendingMessages(backend, pendingMessages)
 
                     await Promise.all([
                         tx
@@ -351,25 +372,12 @@ export async function handleMessage(
     })
 
     if (match.definition._type === 'mutation') {
-        await Promise.all(
-            scheduler.queue.map((item) => {
-                const h = headers()
-                if (item.type === 'request') {
-                    h.append('Request-Id', item.id)
-
-                    if (item.target_at) {
-                        h.append('Target-At', item.target_at.toString())
-                    }
-                }
-
-                return backend.jetstreamClient.publish(
-                    item.path,
-                    JSON.stringify(item.data) ?? 'null',
-                    {
-                        headers: h,
-                    },
-                )
-            }),
+        await publishPendingMessages(
+            backend,
+            scheduler.queue.map((i) => ({
+                ...i,
+                source_request_id: requestId,
+            })),
         )
 
         await backend.db
