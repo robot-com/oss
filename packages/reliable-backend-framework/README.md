@@ -403,32 +403,24 @@ This table is the heart of the transactional outbox pattern. When `scheduler.enq
 ```sql
 CREATE TABLE rbf_outbox (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subject TEXT NOT NULL,
-    payload JSONB,
-    headers JSONB,
-    status TEXT NOT NULL DEFAULT 'pending', -- pending, published, failed
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    scheduled_for TIMESTAMPTZ NOT NULL DEFAULT now(),
-    attempt_count INTEGER NOT NULL DEFAULT 0,
-    last_attempt_at TIMESTAMPTZ,
-    source_request_id TEXT -- The ID of the request that generated this message
+    source_request_id TEXT NOT NULL,
+    type TEXT NOT NULL, -- 'request' or 'message'
+    path TEXT NOT NULL,
+    data JSONB,
+    target_at BIGINT,
+    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::bigint
 );
-
-CREATE INDEX idx_rbf_outbox_pending ON rbf_outbox (scheduled_for) WHERE status = 'pending';
 ```
 
 **Column Explanations:**
 
 *   `id`: A unique identifier for the outbox entry.
-*   `subject`: The NATS subject the message will be published to.
-*   `payload`: The JSON body of the message to be sent.
-*   `headers`: A JSON object containing the NATS headers for the message.
-*   `status`: The state of the message (`pending`, `published`, `failed`). The background publisher only processes `pending` messages.
-*   `created_at`: Timestamp of when the message was first scheduled.
-*   `scheduled_for`: The time at which the message should be published. For `enqueue`, this is `now()`. For `runAt` or `runAfter`, this is a future timestamp.
-*   `attempt_count`: The number of times the background publisher has tried to send this message.
-*   `last_attempt_at`: The timestamp of the last publication attempt, used for backoff logic.
 *   `source_request_id`: The `RBF-Request-Id` of the mutation that created this outbox message, used for tracing and recovery.
+*   `type`: The type of message being sent, e.g., `'request'` for an RBF operation or `'message'` for a raw publish.
+*   `path`: The destination path or NATS subject for the message.
+*   `data`: The JSON body of the message to be sent.
+*   `target_at`: A millisecond epoch timestamp for when the message should be published. For `enqueue`, this is `null` or the current time. For `runAt` or `runAfter`, this is a future timestamp.
+*   `created_at`: A millisecond epoch timestamp of when the message was first scheduled.
 
 #### The `rbf_results` Table
 
@@ -439,24 +431,22 @@ This table is used to ensure idempotency. Before executing a mutation, the frame
 ```sql
 CREATE TABLE rbf_results (
     request_id TEXT PRIMARY KEY,
-    result JSONB,
-    status_code INTEGER NOT NULL,
     requested_path TEXT NOT NULL,
-    requested_input JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    expires_at TIMESTAMPTZ
+    requested_input TEXT NOT NULL,
+    data JSONB,
+    status INTEGER NOT NULL,
+    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::bigint
 );
 ```
 
 **Column Explanations:**
 
 *   `request_id`: The unique identifier for the incoming request, taken from the `RBF-Request-Id` header. This is the primary key and the basis for deduplication.
-*   `result`: The JSON-encoded return value of the mutation handler. If the handler threw an error, this might store error details.
-*   `status_code`: The final HTTP-like status code of the operation (e.g., 200 for success, 400 for bad request).
 *   `requested_path`: The NATS subject of the original request. Used to prevent request ID collisions.
-*   `requested_input`: The JSON payload of the original request. Used to prevent request ID collisions.
-*   `created_at`: Timestamp of when the result was stored.
-*   `expires_at`: An optional timestamp after which the result can be purged to save space.
+*   `requested_input`: The stringified JSON payload of the original request. Used to prevent request ID collisions.
+*   `data`: The JSON-encoded return value of the mutation handler. If the handler threw an error, this might store error details.
+*   `status`: The final HTTP-like status code of the operation (e.g., 200 for success, 409 for conflict).
+*   `created_at`: A millisecond epoch timestamp of when the result was stored.
 
 ### Idempotency and Deduplication
 
