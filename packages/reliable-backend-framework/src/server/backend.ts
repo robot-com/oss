@@ -397,7 +397,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         topic: string,
         {
             retries = 3,
-            timeout = 10_000,
+            // TODO: Review retry strategy. Timeouts are probably bad
+            timeout = 60_000,
             ...options
         }: {
             requestId?: string
