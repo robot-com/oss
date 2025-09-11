@@ -462,11 +462,11 @@ This ensures that even if NATS delivers a message multiple times due to network 
 
 While using the RBF client is the easiest way to interact with your backend, any NATS-compatible client can send messages. To do so, you must adhere to the following contract:
 
-*   **Subject:** The NATS subject is a combination of the queue name and the operation path. For a mutation with `queueName: 'jobs'` and `path: 'users.create'`, the subject would be `jobs.users.create`. For a path with params like `'posts.update.$postId'`, a concrete subject would be `jobs.posts.update.123`.
+*   **Subject:** The NATS subject is a combination of the queue name and the operation path. For a mutation with a queue with subject `jobs` and `path: 'users.create'`, the subject would be `jobs.users.create`. For a path with params like `'posts.update.$postId'`, a concrete subject would be `jobs.posts.update.123`.
 *   **Headers:**
-    *   `RBF-Request-Id`: A unique identifier for this specific request (e.g., a UUID). This is crucial for idempotency.
+    *   `Request-Id`: A unique identifier for this specific request (e.g., a UUID). This is crucial for idempotency.
     *   `Content-Type`: Optional. If not provided, the payload is assumed to be `application/json`.
-*   **Reply-To:** If you expect a response (as is typical for queries and mutations), you must set the NATS `reply-to` field to a subject the client is subscribed to. RBF will publish the result or error to this subject.
+    *   `Reply-To`: Optional. When the request ends, it will publish its result to the given NATS subject.
 *   **Payload:** The body of the message should be the JSON-stringified input object.
 
 ## 6. Roadmap & Future Directions
