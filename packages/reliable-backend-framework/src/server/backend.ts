@@ -44,6 +44,7 @@ export type BackendOptions<
 
     periodicTasksInterval?: number
     resultsMaxAge?: number
+    requestMaxAge?: number
 }
 
 export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
@@ -72,6 +73,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
     private periodicTasksInterval: number
     private resultsMaxAge: number
+    private requestMaxAge: number
 
     constructor(app: TApp, opts: BackendOptions<TApp['_schema']>) {
         this.app = app
@@ -87,7 +89,8 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         this.logger = opts.logger
 
         this.periodicTasksInterval = opts.periodicTasksInterval ?? 30_000
-        this.resultsMaxAge = opts.resultsMaxAge ?? 86_400_000
+        this.resultsMaxAge = opts.resultsMaxAge ?? 86_400_000 // 1 day
+        this.requestMaxAge = opts.requestMaxAge ?? 300_000 // 5 min
     }
 
     private async startInbox(): Promise<void> {

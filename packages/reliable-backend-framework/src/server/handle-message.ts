@@ -120,6 +120,16 @@ export async function handleMessage(
         }
     }
 
+    const expiresAtStr = message.headers?.get('Expires-At') || null
+    if (expiresAtStr) {
+        const expiresAt = Number.parseInt(expiresAtStr, 10)
+
+        if (Number.isInteger(expiresAt) && Date.now() > expiresAt) {
+            message.ack()
+            return
+        }
+    }
+
     const match = matchProcedure(backend, subjectPrefix, message)
     let requestId = message.headers?.get('Request-Id') || null
 
