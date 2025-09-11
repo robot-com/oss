@@ -545,4 +545,52 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
 
         await backend.stop()
     })
+
+    await t.test('massive concurrent requests', async () => {
+        const app = defineBackend({
+            queues: {
+                requests: {
+                    subject: 'requests',
+                },
+            },
+        })
+
+        const getRequest = app.query('requests', {
+            path: 'requests.get.query.massive',
+            handler: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 1000))
+                return {
+                    id: '123',
+                }
+            },
+        })
+
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
+        backend.start()
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
+
+        const promises: Promise<unknown>[] = []
+
+        for (let i = 0; i < 100; i++) {
+            promises.push(backend.query(getRequest, {}))
+        }
+
+        const r = await Promise.allSettled(promises)
+
+        const rejected = r.filter((result) => result.status === 'rejected')
+        const fulfilled = r.filter((result) => result.status === 'fulfilled')
+
+        assert(rejected.length === 0)
+        assert(fulfilled.length === 100)
+
+        await backend.stop()
+    })
 })
