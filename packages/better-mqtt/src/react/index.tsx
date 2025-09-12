@@ -1,4 +1,4 @@
-import type { ErrorWithReasonCode, IClientOptions } from 'mqtt'
+import type { ErrorWithReasonCode } from 'mqtt'
 import {
     createContext,
     type ReactNode,
@@ -8,26 +8,15 @@ import {
     useRef,
     useState,
 } from 'react'
-import { BetterMQTT } from '..'
+import type { BetterMQTT } from '..'
 
 const ctx = createContext<BetterMQTT | null>(null)
 
 export function BetterMQTTProvider(props: {
-    url?: string
-    options?: IClientOptions
     children: ReactNode
+    client: BetterMQTT
 }) {
-    const [client] = useState(() => {
-        if (props.url) {
-            return BetterMQTT.connect(props.url, props.options)
-        }
-
-        return BetterMQTT.connect(props.options ?? {})
-    })
-
-    // TODO: Handle unmounting and cleanup
-
-    return <ctx.Provider value={client}>{props.children}</ctx.Provider>
+    return <ctx.Provider value={props.client}>{props.children}</ctx.Provider>
 }
 
 export function useMQTT() {
@@ -59,7 +48,7 @@ export function useMQTTStatus() {
 export function useMQTTSubscription<T>(
     topic: string,
     parser: (message: Buffer) => T,
-    onMessage: (message: T) => void
+    onMessage: (message: T) => void,
 ) {
     const client = useMQTT()
 
@@ -86,7 +75,7 @@ export function useMQTTSubscription<T>(
 }
 
 export function useMQTTError(
-    onError: (error: Error) => void
+    onError: (error: Error) => void,
 ): Error | ErrorWithReasonCode | null {
     const client = useMQTT()
 

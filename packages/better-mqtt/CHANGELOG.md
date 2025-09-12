@@ -25,3 +25,7 @@
 
 - Fix `connect()` params options. Now it can receive a `brokerUrl` as the first argument.
   (The same as the `mqtt.connect()` function)
+
+## 0.2.0
+
+**BREAKING CHANGE**: `BetterMQTTProvider` now doesn't create the MQTT client internally. You must pass an instance of `BetterMQTT` as a prop.
