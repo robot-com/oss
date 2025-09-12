@@ -1,7 +1,5 @@
 import { EventEmitter } from 'ee-ts'
-import {
-    connect,
-    connectAsync,
+import mqtt, {
     type ErrorWithReasonCode,
     type IClientOptions,
     type MqttClient,
@@ -84,7 +82,7 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     publish(
         topic: string,
         message: string | Buffer,
-        opts?: { qos?: 0 | 1 | 2 }
+        opts?: { qos?: 0 | 1 | 2 },
     ) {
         this.client.publish(topic, message, { qos: opts?.qos ?? 2 })
     }
@@ -143,7 +141,7 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
 
     async subscribeAsync<T>(
         topic: string,
-        parser: MessageParser<T>
+        parser: MessageParser<T>,
     ): Promise<Subscription<T>> {
         const sub = new Subscription<T>({ mqtt: this, topic, parser })
 
@@ -171,12 +169,12 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     }
 
     static async connectAsync(opts: IClientOptions): Promise<BetterMQTT> {
-        const client = await connectAsync(opts)
+        const client = await mqtt.connectAsync(opts)
         return new BetterMQTT(client)
     }
 
     static connect(opts: IClientOptions): BetterMQTT {
-        const client = connect(opts)
+        const client = mqtt.connect(opts)
         return new BetterMQTT(client)
     }
 
@@ -241,7 +239,7 @@ export class Subscription<T = string> extends EventEmitter<
     handleMessage(
         message: Buffer<ArrayBufferLike>,
         topic: string,
-        params: string[]
+        params: string[],
     ) {
         const parsedMessage = this.parser(message)
         this.emit('message', { topic, content: parsedMessage, params })
