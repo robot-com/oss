@@ -20,3 +20,8 @@
 ## 0.1.4
 
 - Fix import of mqtt to improve compatibility (now works in nextjs)
+
+## 0.1.5
+
+- Fix `connect()` params options. Now it can receive a `brokerUrl` as the first argument.
+  (The same as the `mqtt.connect()` function)
