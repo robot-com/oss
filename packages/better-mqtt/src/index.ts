@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: I'm sure it is fine */
 import { EventEmitter } from 'ee-ts'
 import mqtt, {
     type ErrorWithReasonCode,
@@ -6,6 +7,11 @@ import mqtt, {
 } from 'mqtt'
 import { createAsyncGenerator } from './generator'
 import { matchTopic } from './match'
+
+export type ConnectArgs =
+    | [brokerUrl: string]
+    | [brokerUrl: string, opts?: IClientOptions]
+    | [opts: IClientOptions]
 
 export interface BetterMQTTEvents {
     status(status: 'online' | 'offline'): void
@@ -168,13 +174,13 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
         return this.subscribeAsync(topic, binaryParser)
     }
 
-    static async connectAsync(opts: IClientOptions): Promise<BetterMQTT> {
-        const client = await mqtt.connectAsync(opts)
+    static async connectAsync(...args: ConnectArgs): Promise<BetterMQTT> {
+        const client = await mqtt.connectAsync(...(args as [any, any]))
         return new BetterMQTT(client)
     }
 
-    static connect(opts: IClientOptions): BetterMQTT {
-        const client = mqtt.connect(opts)
+    static connect(...args: ConnectArgs): BetterMQTT {
+        const client = mqtt.connect(...(args as [any, any]))
         return new BetterMQTT(client)
     }
 

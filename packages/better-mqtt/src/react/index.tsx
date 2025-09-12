@@ -13,10 +13,17 @@ import { BetterMQTT } from '..'
 const ctx = createContext<BetterMQTT | null>(null)
 
 export function BetterMQTTProvider(props: {
-    options: IClientOptions
+    url?: string
+    options?: IClientOptions
     children: ReactNode
 }) {
-    const [client] = useState(() => BetterMQTT.connect(props.options))
+    const [client] = useState(() => {
+        if (props.url) {
+            return BetterMQTT.connect(props.url, props.options)
+        }
+
+        return BetterMQTT.connect(props.options ?? {})
+    })
 
     // TODO: Handle unmounting and cleanup
 
