@@ -49,6 +49,9 @@ export function useMQTTSubscription<T>(
     topic: string,
     parser: (message: Buffer) => T,
     onMessage: (message: T) => void,
+    opts?: {
+        enabled?: boolean
+    }
 ) {
     const client = useMQTT()
 
@@ -62,6 +65,10 @@ export function useMQTTSubscription<T>(
     }, [])
 
     useEffect(() => {
+        if (opts?.enabled === false) {
+            return
+        }
+
         const sub = client.subscribe<T>(topic, parserMemoed)
 
         sub.on('message', (message) => {
@@ -71,7 +78,7 @@ export function useMQTTSubscription<T>(
         return () => {
             sub.end()
         }
-    }, [client, topic, parserMemoed])
+    }, [client, topic, parserMemoed, opts?.enabled])
 }
 
 export function useMQTTError(

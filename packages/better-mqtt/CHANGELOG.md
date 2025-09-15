@@ -29,3 +29,11 @@
 ## 0.2.0
 
 **BREAKING CHANGE**: `BetterMQTTProvider` now doesn't create the MQTT client internally. You must pass an instance of `BetterMQTT` as a prop.
+
+## 0.2.1
+
+- Added new `mock` module to create mock MQTT clients for testing purposes.
+
+## 0.2.2
+
+- Added support for optional `enabled` flag in `useMQTTSubscription` hook.
