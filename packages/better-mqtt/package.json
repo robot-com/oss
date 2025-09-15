@@ -13,7 +13,7 @@
     "exports": {
         ".": "./src/index.ts",
         "./react": "./src/react/index.tsx",
-        "./mock": "./src/mock.tsx"
+        "./mock": "./src/mock.ts"
     },
     "type": "module",
     "scripts": {

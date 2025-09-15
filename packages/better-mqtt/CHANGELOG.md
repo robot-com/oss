@@ -33,7 +33,4 @@
 ## 0.2.1
 
 - Added new `mock` module to create mock MQTT clients for testing purposes.
-
-## 0.2.2
-
 - Added support for optional `enabled` flag in `useMQTTSubscription` hook.
