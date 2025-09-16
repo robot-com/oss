@@ -313,13 +313,12 @@ export type AppDefinition<
      * @param definition The mutation's configuration, including its path, schemas, and handler.
      */
     mutation: <
-        TQueueName extends keyof TQueues,
         TPath extends string,
         TInput extends z.ZodType = z.ZodNull,
         TOutputSchema extends z.ZodType = z.ZodAny,
         THandlerOutput extends z.infer<TOutputSchema> = z.infer<TOutputSchema>,
     >(
-        queueName: TQueueName,
+        queueName: keyof TQueues,
         definition: Omit<
             MutationDefinition<
                 TBaseContext,
@@ -350,13 +349,12 @@ export type AppDefinition<
      * @param definition The query's configuration, including its path, schemas, and handler.
      */
     query: <
-        TQueueName extends keyof TQueues,
         TPath extends string,
         TInput extends z.ZodType = z.ZodNull,
         TOutputSchema extends z.ZodType = z.ZodAny,
         THandlerOutput extends z.infer<TOutputSchema> = z.infer<TOutputSchema>,
     >(
-        queueName: TQueueName,
+        queueName: keyof TQueues,
         definition: Omit<
             QueryDefinition<
                 TBaseContext,
