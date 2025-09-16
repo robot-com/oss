@@ -46,7 +46,7 @@ export type EnqueueOptions<
  * The scheduler object, available only within mutation handlers.
  * It provides a type-safe API for enqueuing follow-up tasks.
  */
-export type Scheduler = {
+export type SchedulerInterface = {
     /**
      * Schedules a task to run immediately after the current transaction commits.
      * @param mutation The mutation definition to execute.
@@ -112,7 +112,7 @@ export type MutationHandlerArgs<
     /** A Drizzle transaction instance, scoped to this mutation. */
     db: DrizzleTx<TSchema>
     /** The scheduler for enqueuing atomic side-effects. */
-    scheduler: Scheduler
+    scheduler: SchedulerInterface
     /** The validated and parsed input payload for the mutation. */
     input: z.infer<TInput>
     /** An object containing parameters parsed from the mutation's path. */
@@ -198,7 +198,7 @@ export type ProcedureDefinition = {
     handler: (args: {
         ctx: any
         db: DrizzleTx<any>
-        scheduler: Scheduler
+        scheduler: SchedulerInterface
         input: z.infer<any>
         params: PathToParams<any>
     }) => Promise<any>
@@ -271,7 +271,7 @@ export type MiddlewareHandlerArgs<
     /** A Drizzle transaction instance, scoped to this mutation. */
     db: DrizzleTx<TSchema>
     /** The scheduler for enqueuing atomic side-effects. */
-    scheduler: Scheduler
+    scheduler: SchedulerInterface
     /** The validated and parsed input payload for the mutation or query. */
     input: unknown
     /** An object containing parameters parsed from the mutation's path. */

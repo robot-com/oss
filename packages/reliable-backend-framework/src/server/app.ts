@@ -1,5 +1,4 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Needed for type inference */
-import z from 'zod'
 import type { AppDefinition, Middleware, QueueConfig } from '../types'
 import { Registry } from './registry'
 

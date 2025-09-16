@@ -1,6 +1,6 @@
 {
     "name": "@robot.com/reliable-backend-framework",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "type": "module",
     "license": "MIT",
     "private": true,
@@ -11,7 +11,7 @@
         "publish": "node ../publish-package"
     },
     "exports": {
-        ".": "./src/server/index.ts",
+        ".": "./src/index.ts",
         "./schema": "./src/schema/index.ts",
         "./helpers": "./src/helpers/index.ts"
     },
