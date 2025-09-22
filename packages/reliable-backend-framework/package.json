@@ -1,6 +1,6 @@
 {
     "name": "@robot.com/reliable-backend-framework",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "type": "module",
     "license": "MIT",
     "private": true,
@@ -16,12 +16,8 @@
         "./helpers": "./src/helpers/index.ts"
     },
     "dependencies": {
-        "@nats-io/jetstream": "^3.0.2",
-        "@nats-io/nats-core": "^3.0.2",
         "@whatwg-node/server": "^0.10.6",
-        "drizzle-orm": "^0.44.4",
-        "uuid": "^11.1.0",
-        "zod": "^3.24.4"
+        "uuid": "^11.1.0"
     },
     "devDependencies": {
         "@electric-sql/pglite": "^0.3.7",
@@ -32,5 +28,11 @@
         "tsd": "^0.33.0",
         "tsx": "^4.20.3",
         "typescript": "^5.9.2"
+    },
+    "peerDependencies": {
+        "zod": ">=3.24",
+        "@nats-io/jetstream": ">=3",
+        "@nats-io/nats-core": ">=3",
+        "drizzle-orm": ">=0.44"
     }
 }

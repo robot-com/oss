@@ -104,7 +104,7 @@ The first step is to define the structure of your application using `defineBacke
 
 `app.ts`:
 ```ts
-import { defineBackend } from 'rbf-framework';
+import { defineBackend } from '@robot.com/reliable-backend-framework';
 import { z } from 'zod';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { NatsConnection, Msg } from 'nats';
@@ -154,7 +154,7 @@ Once the app is defined, you create a runnable instance with `createBackend`. Th
 
 `main.ts`:
 ```ts
-import { createBackend } from 'rbf-framework';
+import { createBackend } from '@robot.com/reliable-backend-framework';
 import { app, AppContext } from './app';
 import { connect as connectToNats } from 'nats';
 import { drizzle } from 'drizzle-orm/postgres-js';
