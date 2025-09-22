@@ -81,22 +81,22 @@ importers:
   packages/reliable-backend-framework:
     dependencies:
       '@nats-io/jetstream':
-        specifier: ^3.0.2
+        specifier: '>=3'
         version: 3.1.0
       '@nats-io/nats-core':
-        specifier: ^3.0.2
+        specifier: '>=3'
         version: 3.1.0
       '@whatwg-node/server':
         specifier: ^0.10.6
         version: 0.10.12
       drizzle-orm:
-        specifier: ^0.44.4
+        specifier: '>=0.44'
         version: 0.44.4(@electric-sql/pglite@0.3.7)(postgres@3.4.7)
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
       zod:
-        specifier: ^3.24.4
+        specifier: '>=3.24'
         version: 3.25.76
     devDependencies:
       '@electric-sql/pglite':
