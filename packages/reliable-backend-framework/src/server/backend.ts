@@ -6,7 +6,7 @@ import { inArray, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { v7 as uuidv7 } from 'uuid'
 import type z from 'zod'
-import type { ZodType } from 'zod'
+import type { ZodNull, ZodType } from 'zod'
 import { rbf_outbox, rbf_results } from '../schema'
 import type {
     AppDefinition,
@@ -450,7 +450,20 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         throw new Error(`Request failed after ${retries} retries`)
     }
 
-    async query<T extends QueryDefinition<any, any, any, any>>(
+    async query<
+        T extends QueryDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         query: T,
         options: {
             headers?: Record<string, string>
@@ -481,7 +494,20 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         })
     }
 
-    async mutate<T extends MutationDefinition<any, any, any, any>>(
+    async mutate<
+        T extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         query: T,
         options: {
             headers?: Record<string, string>
@@ -492,9 +518,9 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         } & (PathToParams<T['path']> extends Record<string, never>
             ? { params?: undefined }
             : { params: PathToParams<T['path']> }) &
-            (T['input'] extends ZodType
-                ? { input: z.infer<T['input']> }
-                : { input?: undefined }),
+            (T['_input'] extends ZodNull
+                ? { input?: undefined }
+                : { input: z.infer<T['_input']> }),
     ): Promise<
         T['output'] extends ZodType
             ? z.infer<T['output']>

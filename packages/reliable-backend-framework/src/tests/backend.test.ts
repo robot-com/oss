@@ -4,6 +4,7 @@ import assert from 'node:assert'
 import test from 'node:test'
 import { eq, inArray } from 'drizzle-orm'
 import { v7 } from 'uuid'
+import z from 'zod'
 import { defineBackend } from '../server/app'
 import { Backend } from '../server/backend'
 import { RBFError } from '../server/error'
@@ -95,6 +96,47 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
 
         const [post] = await db.select().from(posts).where(eq(posts.id, postId))
         assert.strictEqual(post.id, postId)
+
+        await backend.stop()
+    })
+
+    await t.test('with input', async () => {
+        const app = defineBackend({
+            queues: {
+                requests: {
+                    subject: 'requests',
+                },
+            },
+        })
+
+        const postRequest = app.mutation('requests', {
+            path: 'requests.post.mutation-w-i.$param0',
+            input: z.object({
+                param1: z.string().optional(),
+            }),
+            output: z.boolean(),
+            handler: async () => {
+                return true
+            },
+        })
+
+        const backend = new Backend(app, {
+            db,
+            nats,
+            logger: createConsoleLogger(),
+        })
+
+        backend.start()
+        t.after(async () => {
+            if (backend.running) {
+                await backend.stop()
+            }
+        })
+
+        await backend.mutate(postRequest, {
+            params: { param0: 'test' },
+            input: { param1: 'test' },
+        })
 
         await backend.stop()
     })
