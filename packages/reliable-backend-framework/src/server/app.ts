@@ -1,4 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Needed for type inference */
+/** biome-ignore-all lint/suspicious/noExplicitAny: Needed for type inference */
+import z from 'zod'
 import type { AppDefinition, Middleware, QueueConfig } from '../types'
 import { Registry } from './registry'
 
@@ -47,6 +49,7 @@ export function defineBackend<
                 _type: 'mutation',
                 _queue: opts.queues[queueName],
                 _middleware: middleware,
+                _input: m.input ?? (z.null().catch(null) as any),
             }),
         query: (queueName, q) =>
             registry.addQuery({
@@ -56,6 +59,7 @@ export function defineBackend<
                 _type: 'query',
                 _queue: opts.queues[queueName],
                 _middleware: middleware,
+                _input: q.input ?? (z.null().catch(null) as any),
             }),
         middleware(newMiddleware) {
             return defineBackend({

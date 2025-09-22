@@ -188,6 +188,7 @@ export type MutationDefinition<
     readonly _schema: TSchema
     readonly _queue: TQueue
     readonly _middleware: TMiddleware
+    readonly _input: TInput
 }
 
 export type ProcedureDefinition = {
@@ -255,6 +256,7 @@ export type QueryDefinition<
     readonly _schema: TSchema
     readonly _queue: TQueue
     readonly _middleware: TMiddleware
+    readonly _input: TInput
 }
 
 // --- Middleware ---
@@ -330,7 +332,12 @@ export type AppDefinition<
                 THandlerOutput,
                 TMutationMetadata
             >,
-            '_type' | '_context' | '_schema' | '_queue' | '_middleware'
+            | '_type'
+            | '_context'
+            | '_schema'
+            | '_queue'
+            | '_middleware'
+            | '_input'
         >,
     ) => MutationDefinition<
         TBaseContext,
@@ -366,7 +373,12 @@ export type AppDefinition<
                 THandlerOutput,
                 TQueryMetadata
             >,
-            '_type' | '_context' | '_schema' | '_queue' | '_middleware'
+            | '_type'
+            | '_context'
+            | '_schema'
+            | '_queue'
+            | '_middleware'
+            | '_input'
         >,
     ) => QueryDefinition<
         TBaseContext,
