@@ -562,7 +562,10 @@ await test('backend tests sequentially', { concurrency: false }, async (t) => {
         })
 
         try {
-            await backend.mutate(createFirstPostAndFail, {})
+            await backend.mutate(createFirstPostAndFail, {
+                timeout: 20 * 1000,
+                retries: 1,
+            })
             throw new Error('Expected mutation to fail')
         } catch (error) {
             assert(error instanceof RBFError)
