@@ -255,6 +255,7 @@ export async function handleMessage(
                 db: tx,
                 scheduler: null as unknown as Scheduler,
                 input,
+                message,
                 params: match.params,
                 type: match.definition._type,
             })

@@ -2,6 +2,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: It is required for the type inference */
 /** biome-ignore-all lint/complexity/noBannedTypes: It is required for the type inference */
 
+import type { JsMsg } from '@nats-io/jetstream'
 import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import type { PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js'
@@ -52,7 +53,20 @@ export type SchedulerInterface = {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    enqueue: <TDef extends MutationDefinition<any, any, any, any, any>>(
+    enqueue: <
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         mutation: TDef,
         options: EnqueueOptions<TDef>,
     ) => void
@@ -63,7 +77,20 @@ export type SchedulerInterface = {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    runAt: <TDef extends MutationDefinition<any, any, any, any, any>>(
+    runAt: <
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         date: Date,
         mutation: TDef,
         options: EnqueueOptions<TDef>,
@@ -75,7 +102,20 @@ export type SchedulerInterface = {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    runAfter: <TDef extends MutationDefinition<any, any, any, any, any>>(
+    runAfter: <
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         delay: { seconds?: number; minutes?: number; hours?: number },
         mutation: TDef,
         options: EnqueueOptions<TDef>,
@@ -87,7 +127,7 @@ export type SchedulerInterface = {
      * @param subject The target NATS subject.
      * @param payload The message payload.
      */
-    publish: (subject: string, payload: Uint8Array) => void
+    publish: (subject: string, payload: any) => void
 
     /**
      * Suggests a delay before NATS should redeliver a failed message.
@@ -278,6 +318,8 @@ export type MiddlewareHandlerArgs<
     input: unknown
     /** An object containing parameters parsed from the mutation's path. */
     params: Record<string, string>
+    /** The original message object. */
+    message: JsMsg
     /** The type of the operation. */
     type: 'mutation' | 'query'
 }

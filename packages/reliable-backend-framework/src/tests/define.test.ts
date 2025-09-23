@@ -9,7 +9,9 @@ import { defineBackend } from '../server/app'
 test('basic', () => {
     const app = defineBackend({
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -48,7 +50,9 @@ test('with context', () => {
             env: 'testing' as const,
         },
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -68,7 +72,9 @@ test('with context', () => {
 test('with input', () => {
     const app = defineBackend({
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -91,7 +97,9 @@ test('with input', () => {
 test('with output', () => {
     const app = defineBackend({
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -111,7 +119,9 @@ test('with output', () => {
 test('with params', () => {
     const app = defineBackend({
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -134,7 +144,9 @@ test('with middleware', () => {
             env: 'testing' as const,
         },
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 
@@ -200,7 +212,9 @@ test('all combined', () => {
             env: 'testing' as const,
         },
         queues: {
-            requests: {},
+            requests: {
+                subject: 'requests',
+            },
         },
     })
 

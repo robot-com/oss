@@ -54,10 +54,20 @@ export class Scheduler {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    enqueue<TDef extends MutationDefinition<any, any, any, any, any>>(
-        mutation: TDef,
-        options: EnqueueOptions<TDef>,
-    ): void {
+    enqueue<
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(mutation: TDef, options: EnqueueOptions<TDef>): void {
         this.enqueueInternal(mutation, { ...options, targetTimestamp: null })
     }
 
@@ -67,11 +77,20 @@ export class Scheduler {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    runAt<TDef extends MutationDefinition<any, any, any, any, any>>(
-        date: Date,
-        mutation: TDef,
-        options: EnqueueOptions<TDef>,
-    ): void {
+    runAt<
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(date: Date, mutation: TDef, options: EnqueueOptions<TDef>): void {
         this.enqueueInternal(mutation, {
             ...options,
             targetTimestamp: date.getTime(),
@@ -84,7 +103,20 @@ export class Scheduler {
      * @param mutation The mutation definition to execute.
      * @param options The input for the mutation.
      */
-    runAfter<TDef extends MutationDefinition<any, any, any, any, any>>(
+    runAfter<
+        TDef extends MutationDefinition<
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any,
+            any
+        >,
+    >(
         delay: {
             ms?: number
             seconds?: number
@@ -111,7 +143,7 @@ export class Scheduler {
      * @param subject The target NATS subject.
      * @param payload The message payload.
      */
-    publish(subject: string, payload: Uint8Array): void {
+    publish(subject: string, payload: any): void {
         this.queue.push({
             type: 'message',
             id: uuidv7(),
