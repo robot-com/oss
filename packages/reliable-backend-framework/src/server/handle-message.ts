@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: It is not a problem */
 import type { JsMsg } from '@nats-io/jetstream'
 import { headers, type NatsConnection } from '@nats-io/nats-core'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { rbf_outbox, rbf_results } from '../schema'
 import type { AppDefinition } from '../types'
 import type { Backend } from './backend'
@@ -190,14 +190,19 @@ export async function handleMessage(
         async (tx) => {
             await tx.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
             await tx.execute(
-                sql`SELECT pg_advisory_xact_lock(hashtext(${requestId}));`,
+                sql`SELECT pg_advisory_xact_lock(hashtext(${backend.namespace} || '_' || ${requestId}));`,
             )
             // VERIFY IF RESPONSE ALREADY EXISTS!
             // IF ALREADY EXIST, RETRY SEND PENDING MESSAGES
             const [existingResponse] = await tx
                 .select()
                 .from(rbf_results)
-                .where(eq(rbf_results.request_id, requestId))
+                .where(
+                    and(
+                        eq(rbf_results.namespace, backend.namespace),
+                        eq(rbf_results.request_id, requestId),
+                    ),
+                )
 
             if (existingResponse) {
                 if (
@@ -242,14 +247,24 @@ export async function handleMessage(
                     const pendingMessages = await tx
                         .select()
                         .from(rbf_outbox)
-                        .where(eq(rbf_outbox.source_request_id, requestId))
+                        .where(
+                            and(
+                                eq(rbf_outbox.namespace, backend.namespace),
+                                eq(rbf_outbox.source_request_id, requestId),
+                            ),
+                        )
 
                     await publishPendingMessages(backend, pendingMessages)
 
                     await Promise.all([
                         tx
                             .delete(rbf_outbox)
-                            .where(eq(rbf_outbox.source_request_id, requestId)),
+                            .where(
+                                and(
+                                    eq(rbf_outbox.namespace, backend.namespace),
+                                    eq(rbf_outbox.source_request_id, requestId),
+                                ),
+                            ),
                     ])
                 }
             }
@@ -278,6 +293,7 @@ export async function handleMessage(
                             .insert(rbf_results)
                             .values({
                                 request_id: requestId,
+                                namespace: backend.namespace,
                                 requested_path: message.subject,
                                 requested_input: JSON.stringify(input),
                                 data,
@@ -309,6 +325,7 @@ export async function handleMessage(
                                     ...item,
                                     source_request_id: requestId,
                                     target_at: item.target_at,
+                                    namespace: backend.namespace,
                                 })),
                             )
                         }
@@ -328,6 +345,7 @@ export async function handleMessage(
                     if (match.definition._type === 'mutation') {
                         await tx.insert(rbf_results).values({
                             request_id: requestId,
+                            namespace: backend.namespace,
                             requested_path: message.subject,
                             requested_input: JSON.stringify(input),
                             data: error.data,

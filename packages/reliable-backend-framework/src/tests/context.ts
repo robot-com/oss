@@ -26,22 +26,26 @@ export async function createTestContext() {
     const db = drizzle(client, { schema: mergedSchema })
 
     await client.unsafe(`CREATE TABLE IF NOT EXISTS rbf_outbox (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID NOT NULL DEFAULT gen_random_uuid(),
+        namespace TEXT NOT NULL,
         source_request_id TEXT NOT NULL,
         type TEXT NOT NULL CHECK (type IN ('request', 'message')),
         path TEXT NOT NULL,
         data JSONB,
         target_at BIGINT,
-        created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT
+        created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
+        PRIMARY KEY (namespace, id)
     );`)
 
     await client.unsafe(`CREATE TABLE IF NOT EXISTS rbf_results (
-        request_id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        namespace TEXT NOT NULL,
         requested_path TEXT NOT NULL,
         requested_input TEXT NOT NULL,
         data JSONB,
         status INTEGER NOT NULL,
-        created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT
+        created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM now()) * 1000)::BIGINT,
+        PRIMARY KEY (namespace, request_id)
     );`)
 
     await client.unsafe(`CREATE TABLE IF NOT EXISTS posts (

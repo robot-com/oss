@@ -2,7 +2,7 @@
 
 import { type JetStreamClient, jetstream } from '@nats-io/jetstream'
 import { headers, type NatsConnection } from '@nats-io/nats-core'
-import { inArray, lt } from 'drizzle-orm'
+import { and, eq, inArray, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { v7 as uuidv7 } from 'uuid'
 import type z from 'zod'
@@ -36,6 +36,7 @@ export type JetstreamConfig = {
 export type BackendOptions<
     S extends Record<string, unknown> = Record<string, unknown>,
 > = {
+    namespace?: string
     db: PostgresJsDatabase<S>
     nats: NatsConnection
     jetstream?: JetstreamConfig
@@ -48,6 +49,7 @@ export type BackendOptions<
 }
 
 export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
+    namespace = 'default'
     app: TApp
     db: PostgresJsDatabase<TApp['_schema']>
     nats: NatsConnection
@@ -76,6 +78,9 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
     private requestMaxAge: number
 
     constructor(app: TApp, opts: BackendOptions<TApp['_schema']>) {
+        if (opts.namespace) {
+            this.namespace = opts.namespace
+        }
         this.app = app
         this.db = opts.db
         this.nats = opts.nats
@@ -220,7 +225,12 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         const messages = await this.db
             .select()
             .from(rbf_outbox)
-            .where(lt(rbf_outbox.created_at, Date.now() - 5_000))
+            .where(
+                and(
+                    eq(rbf_outbox.namespace, this.namespace),
+                    lt(rbf_outbox.created_at, Date.now() - 5_000),
+                ),
+            )
         await publishPendingMessages(this, messages)
         await this.db.delete(rbf_outbox).where(
             inArray(
