@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: It is not a problem */
 import type { JsMsg } from '@nats-io/jetstream'
 import { headers, type NatsConnection } from '@nats-io/nats-core'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { rbf_outbox, rbf_results } from '../schema'
 import type { AppDefinition } from '../types'
 import type { Backend } from './backend'
@@ -188,6 +188,10 @@ export async function handleMessage(
 
     const result = await backend.db.transaction(
         async (tx) => {
+            await tx.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
+            await tx.execute(
+                sql`SELECT pg_advisory_xact_lock(hashtext(${requestId}));`,
+            )
             // VERIFY IF RESPONSE ALREADY EXISTS!
             // IF ALREADY EXIST, RETRY SEND PENDING MESSAGES
             const [existingResponse] = await tx
