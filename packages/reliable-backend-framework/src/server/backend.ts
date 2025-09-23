@@ -259,7 +259,7 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
         }
     }
 
-    async start(): Promise<void> {
+    async start(opts?: { clientOnly?: boolean }): Promise<void> {
         if (this.abortController) {
             throw new Error('Backend already started')
         }
@@ -268,6 +268,10 @@ export class Backend<TApp extends AppDefinition<any, any, any, any, any, any>> {
 
         this.pendingPromises.add(this.startInbox())
         this.pendingPromises.add(this.startLocalPeriodicTasks())
+
+        if (opts?.clientOnly) {
+            return
+        }
 
         Object.entries(this.app._queues as Record<string, QueueConfig>).forEach(
             ([defaultName, queue]) => {
