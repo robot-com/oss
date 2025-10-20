@@ -34,3 +34,8 @@
 
 - Added new `mock` module to create mock MQTT clients for testing purposes.
 - Added support for optional `enabled` flag in `useMQTTSubscription` hook.
+
+## 0.2.3
+
+- Fixed shared subscription duplication bug.
+- Added `mqttSubIdentifier` for subscriptions to avoid duplication in shared subscriptions.

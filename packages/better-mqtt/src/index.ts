@@ -37,12 +37,19 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     readonly client: MqttClient
     error: Error | ErrorWithReasonCode | null = null
 
+    private lasteSubIdentifier = 0
+    getNextSubIdentifier() {
+        return ++this.lasteSubIdentifier
+    }
+
     get status() {
         return this.client.connected ? 'online' : 'offline'
     }
 
-    private sharedMqttSubscriptions: Map<string, Set<Subscription<unknown>>> =
-        new Map()
+    private sharedMqttSubscriptions: Map<
+        string,
+        { id: number; set: Set<Subscription<unknown>> }
+    > = new Map()
 
     constructor(client: MqttClient) {
         super()
@@ -65,12 +72,21 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
             this.emit('error', error)
         })
 
-        this.client.on('message', (topic, message) => {
+        this.client.on('message', (topic, message, packet) => {
             const subscriptions: [Set<Subscription<unknown>>, string[]][] = []
             for (const [
                 pattern,
-                set,
+                { set, id },
             ] of this.sharedMqttSubscriptions.entries()) {
+                if (
+                    Number.isInteger(
+                        packet.properties?.subscriptionIdentifier,
+                    ) &&
+                    id !== packet.properties?.subscriptionIdentifier
+                ) {
+                    continue
+                }
+
                 const match = matchTopic(topic, pattern)
                 if (match) {
                     subscriptions.push([set, match.params])
@@ -106,7 +122,7 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     }
 
     unsubscribe(sub: Subscription<unknown>) {
-        const set = this.sharedMqttSubscriptions.get(sub.topic)
+        const set = this.sharedMqttSubscriptions.get(sub.topic)?.set
         if (set) {
             sub.emit('end')
             set.delete(sub)
@@ -120,12 +136,20 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     subscribe<T>(topic: string, parser: MessageParser<T>): Subscription<T> {
         const sub = new Subscription<T>({ mqtt: this, topic, parser })
 
-        const set = this.sharedMqttSubscriptions.get(topic)
-        if (set) {
-            set.add(sub)
+        const s = this.sharedMqttSubscriptions.get(topic)
+        if (s) {
+            s.set.add(sub)
+            sub.mqttSubIdentifier = s.id
         } else {
-            this.sharedMqttSubscriptions.set(topic, new Set([sub]))
-            this.client.subscribe(topic, { qos: 2, rh: 2 })
+            const id = this.getNextSubIdentifier()
+            this.sharedMqttSubscriptions.set(topic, { id, set: new Set([sub]) })
+            this.client.subscribe(topic, {
+                qos: 2,
+                rh: 2,
+                properties: {
+                    subscriptionIdentifier: id,
+                },
+            })
         }
 
         return sub
@@ -151,12 +175,16 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     ): Promise<Subscription<T>> {
         const sub = new Subscription<T>({ mqtt: this, topic, parser })
 
-        const set = this.sharedMqttSubscriptions.get(topic)
-        if (set) {
-            set.add(sub)
+        const s = this.sharedMqttSubscriptions.get(topic)
+        if (s) {
+            s.set.add(sub)
+            sub.mqttSubIdentifier = s.id
         } else {
-            this.sharedMqttSubscriptions.set(topic, new Set([sub]))
-            await this.client.subscribeAsync(topic)
+            const id = this.getNextSubIdentifier()
+            this.sharedMqttSubscriptions.set(topic, { id, set: new Set([sub]) })
+            await this.client.subscribeAsync(topic, {
+                properties: { subscriptionIdentifier: id },
+            })
         }
 
         return sub
@@ -205,6 +233,8 @@ export interface SubscriptionEvents<T> {
 export class Subscription<T = string> extends EventEmitter<
     SubscriptionEvents<T>
 > {
+    mqttSubIdentifier: number | undefined
+
     private mqtt: BetterMQTT
 
     private generator: AsyncGenerator<BetterMQTTMessage<T>>
