@@ -1,3 +1,4 @@
+import type { JsonReport } from '../../report'
 import { createJsonDiffReport } from '../../report/json'
 import type { RemoteSchema } from '../remote'
 import {
@@ -26,9 +27,13 @@ import {
 export function generatePushDiffSchema(
     oldSchema: RemoteSchema,
     newSchema: RemoteSchema,
-): string[][] {
+) {
     const report = createJsonDiffReport(oldSchema, newSchema)
 
+    return generateMigrationSQL(report)
+}
+
+export function generateMigrationSQL(report: JsonReport): string[][] {
     const statements: string[][] = []
 
     // Drop removed views first
