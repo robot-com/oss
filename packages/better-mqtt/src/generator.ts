@@ -65,6 +65,7 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
                 if (item.type === 'value') {
                     yield item.value
                 } else if (item.type === 'error') {
+                    closed = true
                     throw item.error
                 } else if (item.type === 'done') {
                     break
@@ -73,6 +74,8 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
                 await promise // Wait for a new value or a signal
             }
         }
+
+        closed = true
     }
 
     return { push, throwError, end, generator: generator() }
