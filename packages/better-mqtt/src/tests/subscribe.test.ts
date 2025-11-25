@@ -111,7 +111,7 @@ test('unsubscribe', { timeout: TEST_TIMEOUT }, async () => {
 
     mqtt.publish(
         'test/better-mqtt/subscribe_4',
-        'this message should not be received'
+        'this message should not be received',
     )
 
     let received = false
@@ -131,15 +131,15 @@ test(
         const mqtt = await BetterMQTT.connectAsync(connectOptions)
 
         const sub1 = await mqtt.subscribeStringAsync(
-            'test/better-mqtt/subscribe_5'
+            'test/better-mqtt/subscribe_5',
         )
         const sub2 = await mqtt.subscribeStringAsync(
-            'test/better-mqtt/subscribe_5'
+            'test/better-mqtt/subscribe_5',
         )
 
         mqtt.publish(
             'test/better-mqtt/subscribe_5',
-            'test message to unsubscribe'
+            'test message to unsubscribe',
         )
 
         for await (const message of sub1) {
@@ -151,7 +151,7 @@ test(
 
         mqtt.publish(
             'test/better-mqtt/subscribe_5',
-            'this message should not be received'
+            'this message should not be received',
         )
 
         let received = false
@@ -167,5 +167,5 @@ test(
         assert.strictEqual(received, false)
 
         mqtt.end()
-    }
+    },
 )

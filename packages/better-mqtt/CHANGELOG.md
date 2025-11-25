@@ -39,3 +39,12 @@
 
 - Fixed shared subscription duplication bug.
 - Added `mqttSubIdentifier` for subscriptions to avoid duplication in shared subscriptions.
+
+## 0.3.0
+
+- Internal refactor of subscription management
+- Added support for retained messages (highly requested)
+- Added `qos`, `rh`, `rap` and `nl` options to subscriptions
+- Added `qos` and `retain` options to `publish`
+- Improved handling of instance termination
+- Added `endAsync` function

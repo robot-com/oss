@@ -8,7 +8,7 @@ import {
     useRef,
     useState,
 } from 'react'
-import type { BetterMQTT } from '..'
+import type { BetterMQTT, SubscriptionOptions } from '..'
 
 const ctx = createContext<BetterMQTT | null>(null)
 
@@ -51,7 +51,7 @@ export function useMQTTSubscription<T>(
     onMessage: (message: T) => void,
     opts?: {
         enabled?: boolean
-    }
+    } & Partial<SubscriptionOptions>,
 ) {
     const client = useMQTT()
 
@@ -69,7 +69,12 @@ export function useMQTTSubscription<T>(
             return
         }
 
-        const sub = client.subscribe<T>(topic, parserMemoed)
+        const sub = client.subscribe<T>(topic, parserMemoed, {
+            nl: opts?.nl,
+            qos: opts?.qos,
+            rap: opts?.rap,
+            rh: opts?.rh,
+        })
 
         sub.on('message', (message) => {
             onMessageRef.current(message.content)
@@ -78,7 +83,16 @@ export function useMQTTSubscription<T>(
         return () => {
             sub.end()
         }
-    }, [client, topic, parserMemoed, opts?.enabled])
+    }, [
+        client,
+        topic,
+        parserMemoed,
+        opts?.enabled,
+        opts?.nl,
+        opts?.qos,
+        opts?.rap,
+        opts?.rh,
+    ])
 }
 
 export function useMQTTError(

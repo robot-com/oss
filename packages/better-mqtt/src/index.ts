@@ -9,6 +9,9 @@ import { SubscriptionManager } from './subs-manager'
 import { Subscription } from './subscription'
 import type { SubscriptionOptions } from './types'
 
+export * from './subscription'
+export * from './types'
+
 export type ConnectArgs =
     | [brokerUrl: string]
     | [brokerUrl: string, opts?: IClientOptions]
