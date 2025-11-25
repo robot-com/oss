@@ -73,7 +73,36 @@ class SubscriptionGroup {
 }
 
 class SubscriptionManager {
+    onSubEnd
+
     private subs = new Map<number, SubscriptionGroup>()
+
+    subscribe(
+        sub: Subscription<unknown>,
+        id: number,
+        topic: string,
+        qos: 0 | 1 | 2,
+        rh: 0 | 1 | 2,
+        rap: 0 | 1,
+        nl: boolean,
+    ) {
+        let group = this.subs.get(id)
+        if (!group) {
+            group = new SubscriptionGroup(topic, id, qos, rh, rap, nl)
+            this.subs.set(id, group)
+        }
+        group.add(sub)
+    }
+
+    unsubscribe(sub: Subscription<unknown>, id: number) {
+        const group = this.subs.get(id)
+        if (group) {
+            group.remove(sub)
+            if (group.isEmpty()) {
+                this.subs.delete(id)
+            }
+        }
+    }
 }
 
 export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
