@@ -9,16 +9,16 @@
  */
 export function matchTopic(
     topic: string,
-    pattern: string
+    pattern: string,
 ): { params: string[] } | null {
-    if (!(topic && pattern)) {
+    if (!topic || !pattern) {
         return null
     }
 
+    const topicSegments = topic.split('/')
     const patternSegments = pattern.split('/')
 
-    // Handle MQTT shared subscriptions by removing the prefix from the pattern.
-    // Format: $share/group-name/topic
+    // Handle MQTT shared subscriptions
     if (patternSegments[0] === '$share') {
         if (patternSegments.length < 3) {
             return null // Invalid $share pattern
@@ -31,30 +31,41 @@ export function matchTopic(
         patternSegments.shift() // Remove $queue
     }
 
-    const processedPattern = patternSegments.join('/')
+    const params: string[] = []
+    const patternLen = patternSegments.length
+    const topicLen = topicSegments.length
 
-    // Per MQTT spec, the '#' wildcard must be the last character of the pattern.
-    if (
-        processedPattern.includes('#') &&
-        processedPattern.indexOf('#') !== processedPattern.length - 1
-    ) {
-        // Invalid pattern, e.g., "system/#/errors"
+    for (let i = 0; i < patternLen; i++) {
+        const patternSegment = patternSegments[i]
+
+        if (patternSegment === '#') {
+            // # must be the last segment
+            if (i !== patternLen - 1) {
+                return null
+            }
+            // Capture the rest of the topic
+            params.push(topicSegments.slice(i).join('/'))
+            return { params }
+        }
+
+        // If we ran out of topic segments but pattern still has more (and not #), no match
+        if (i >= topicLen) {
+            return null
+        }
+
+        const topicSegment = topicSegments[i]
+
+        if (patternSegment === '+') {
+            params.push(topicSegment)
+        } else if (patternSegment !== topicSegment) {
+            return null
+        }
+    }
+
+    // If pattern finished but topic has more segments, no match (unless handled by # above)
+    if (topicLen > patternLen) {
         return null
     }
 
-    // Convert the MQTT pattern to a regular expression with capturing groups.
-    const regexString = `^${processedPattern
-        .replace(/\+/g, '([^/]+)') // '+' matches one level, capture it.
-        .replace(/#/g, '(.*)')}$`
-
-    const regex = new RegExp(regexString)
-    const match: RegExpExecArray | null = regex.exec(topic)
-
-    if (!match) {
-        return null // No match found.
-    }
-
-    // The first element of the match array is the full string, so we slice it off.
-    // If there are no wildcards, this will correctly return an empty array.
-    return { params: match.slice(1) }
+    return { params }
 }

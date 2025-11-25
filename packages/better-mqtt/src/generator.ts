@@ -23,7 +23,7 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
 
     const push = (value: T): void => {
         if (closed) {
-            console.warn('Attempted to push to a closed generator.')
+            // console.warn('Attempted to push to a closed generator.')
             return
         }
         queue.push({ type: 'value', value })
@@ -36,7 +36,7 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
 
     const throwError = (error: Error): void => {
         if (closed) {
-            console.warn('Attempted to throw error to a closed generator.')
+            // console.warn('Attempted to throw error to a closed generator.')
             return
         }
         queue.push({ type: 'error', error })
@@ -49,7 +49,7 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
 
     const end = (): void => {
         if (closed) {
-            console.warn('Attempted to end a closed generator.')
+            // console.warn('Attempted to end a closed generator.')
             return
         }
         closed = true
@@ -65,6 +65,7 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
                 if (item.type === 'value') {
                     yield item.value
                 } else if (item.type === 'error') {
+                    closed = true
                     throw item.error
                 } else if (item.type === 'done') {
                     break
@@ -73,6 +74,8 @@ export function createAsyncGenerator<T>(): AsyncGeneratorWithPush<T> {
                 await promise // Wait for a new value or a signal
             }
         }
+
+        closed = true
     }
 
     return { push, throwError, end, generator: generator() }
