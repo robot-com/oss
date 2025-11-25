@@ -33,6 +33,49 @@ export function binaryParser(message: Buffer): Buffer {
     return message
 }
 
+class SubscriptionGroup {
+    topic: string
+    id: number
+    subs: Set<Subscription<unknown>>
+    qos: 0 | 1 | 2
+    rh: 0 | 1 | 2
+    rap: 0 | 1
+    nl: boolean
+
+    constructor(
+        topic: string,
+        id: number,
+        qos: 0 | 1 | 2,
+        rh: 0 | 1 | 2,
+        rap: 0 | 1,
+        nl: boolean,
+    ) {
+        this.topic = topic
+        this.id = id
+        this.subs = new Set()
+        this.qos = qos
+        this.rh = rh
+        this.rap = rap
+        this.nl = nl
+    }
+
+    add(sub: Subscription<unknown>) {
+        this.subs.add(sub)
+    }
+
+    remove(sub: Subscription<unknown>) {
+        this.subs.delete(sub)
+    }
+
+    isEmpty() {
+        return this.subs.size === 0
+    }
+}
+
+class SubscriptionManager {
+    private subs = new Map<number, SubscriptionGroup>()
+}
+
 export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     readonly client: MqttClient
     error: Error | ErrorWithReasonCode | null = null
