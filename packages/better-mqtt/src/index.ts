@@ -65,6 +65,10 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
             this.emit('error', error)
         })
 
+        this.client.off('end', () => {
+            this.end(false)
+        })
+
         this.client.on('message', (topic, message, packet) => {
             this.subscriptions.handleMessage(topic, message, packet)
         })
@@ -73,13 +77,25 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     publish(
         topic: string,
         message: string | Buffer,
-        opts?: { qos?: 0 | 1 | 2 },
+        opts?: { qos?: 0 | 1 | 2; dup?: boolean; retain?: boolean },
     ) {
-        this.client.publish(topic, message, { qos: opts?.qos ?? 2 })
+        this.client.publish(topic, message, {
+            qos: opts?.qos ?? 2,
+            dup: opts?.dup,
+            retain: opts?.retain,
+        })
     }
 
-    async publishAsync(topic: string, message: string | Buffer): Promise<void> {
-        this.client.publishAsync(topic, message)
+    async publishAsync(
+        topic: string,
+        message: string | Buffer,
+        opts?: { qos?: 0 | 1 | 2; dup?: boolean; retain?: boolean },
+    ): Promise<void> {
+        await this.client.publishAsync(topic, message, {
+            qos: opts?.qos ?? 2,
+            dup: opts?.dup,
+            retain: opts?.retain,
+        })
     }
 
     publishJson<T>(topic: string, message: T) {
@@ -91,6 +107,7 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     }
 
     unsubscribe(sub: Subscription<unknown>) {
+        sub.emit('end')
         const group = this.subscriptions.remove(sub)
         if (group?.isEmpty()) {
             this.client.unsubscribe(group.topic)
@@ -145,6 +162,7 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
     }
 
     async unsubscribeAsync(sub: Subscription<unknown>) {
+        sub.emit('end')
         const group = this.subscriptions.remove(sub)
         if (group?.isEmpty()) {
             await this.client.unsubscribeAsync(group.topic)
@@ -206,8 +224,33 @@ export class BetterMQTT extends EventEmitter<BetterMQTTEvents> {
         return new BetterMQTT(client)
     }
 
-    end() {
-        this.client.end()
+    end(endClient = true) {
+        const subs = this.subscriptions.all()
+        for (const sub of subs) {
+            sub.emit('end')
+            if (endClient) {
+                this.unsubscribe(sub)
+            }
+        }
+
+        if (endClient) {
+            this.client.end()
+        }
+
+        this.emit('end')
+    }
+
+    async endAsync(endClient = true) {
+        const subs = this.subscriptions.all()
+        for (const sub of subs) {
+            sub.emit('end')
+        }
+
+        if (endClient) {
+            await Promise.all(subs.map((sub) => this.unsubscribeAsync(sub)))
+            await this.client.endAsync()
+        }
+
         this.emit('end')
     }
 }

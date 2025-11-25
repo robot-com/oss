@@ -186,4 +186,15 @@ export class SubscriptionManager {
             group.handleMessage(topic, message, packet)
         }
     }
+
+    all() {
+        const subs: Subscription<unknown>[] = []
+        for (const group of this.subsById.values()) {
+            for (const sub of group.subs) {
+                subs.push(sub)
+            }
+        }
+
+        return subs
+    }
 }
