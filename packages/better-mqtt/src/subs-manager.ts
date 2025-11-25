@@ -164,8 +164,8 @@ export class SubscriptionManager {
         const subId = packet.properties?.subscriptionIdentifier
         if (!subId) {
             // Fallback if no subscription identifier is present
-            for (const [topic, group] of this.subsByTopic.entries()) {
-                const match = matchTopic(topic, group.topic)
+            for (const [subTopic, group] of this.subsByTopic.entries()) {
+                const match = matchTopic(topic, subTopic)
                 if (!match) {
                     continue
                 }
