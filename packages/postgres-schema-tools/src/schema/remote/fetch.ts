@@ -14,50 +14,50 @@ export type QuerySchemaOptions = {
 
 export async function fetchSchemaPgLite(
     client: PGlite,
-    options: QuerySchemaOptions = {}
+    options: QuerySchemaOptions = {},
 ): Promise<RemoteSchema> {
     return removeIgnoredElements(
         await client
             .query<{ public_schema_json: RemoteSchema }>(extractSchemaSQLQuery)
             .then((r) => r.rows[0]!.public_schema_json),
-        options
+        options,
     )
 }
 
 export async function fetchSchemaPostgresSQL(
     client: Sql,
-    options: QuerySchemaOptions = {}
+    options: QuerySchemaOptions = {},
 ) {
     return removeIgnoredElements(
         await client
             .unsafe<{ public_schema_json: RemoteSchema }[]>(
-                extractSchemaSQLQuery
+                extractSchemaSQLQuery,
             )
             .then((r) => r[0]!.public_schema_json),
-        options
+        options,
     )
 }
 
 function removeIgnoredElements(
     schema: RemoteSchema,
-    options: QuerySchemaOptions
+    options: QuerySchemaOptions,
 ): RemoteSchema {
     if (options.ignore?.views) {
         schema.views = schema.views.filter(
-            (v) => !options.ignore!.views!.includes(v.name)
+            (v) => !options.ignore!.views!.includes(v.name),
         )
     }
 
     if (options.ignore?.tables) {
         schema.tables = schema.tables.filter(
-            (t) => !options.ignore!.tables!.includes(t.name)
+            (t) => !options.ignore!.tables!.includes(t.name),
         )
     }
 
     if (options.ignore?.indexes) {
         schema.tables.forEach((t) => {
             t.indexes = t.indexes.filter(
-                (i) => !options.ignore!.indexes!.includes(i.name)
+                (i) => !options.ignore!.indexes!.includes(i.name),
             )
         })
     }
@@ -65,7 +65,7 @@ function removeIgnoredElements(
     if (options.ignore?.constraints) {
         schema.tables.forEach((t) => {
             t.constraints = t.constraints.filter(
-                (c) => !options.ignore!.constraints!.includes(c.name)
+                (c) => !options.ignore!.constraints!.includes(c.name),
             )
         })
     }

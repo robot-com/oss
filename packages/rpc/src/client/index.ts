@@ -7,18 +7,18 @@ export type CallOptions<P, I> = {
     timeout?: number
 } & (P extends null | undefined
     ? {
-        params?: P
-    }
+          params?: P
+      }
     : {
-        params: P
-    }) &
+          params: P
+      }) &
     (I extends null | undefined
         ? {
-            input?: I
-        }
+              input?: I
+          }
         : {
-            input: I
-        })
+              input: I
+          })
 
 export interface RPCClient {
     call<T extends Procedure>(
@@ -26,6 +26,6 @@ export interface RPCClient {
         opts: CallOptions<
             ProcedureParams<T['paramsSchema']>,
             ProcedureParams<T['inputSchema']>
-        >
+        >,
     ): Promise<ProcedureOutput<T['outputSchema']>>
 }

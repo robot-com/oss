@@ -22,7 +22,7 @@ import type {
 } from './types'
 
 export function localEnumToRemoteEnum(
-    localEnum: LocalEnumDefinition
+    localEnum: LocalEnumDefinition,
 ): EnumDefinition {
     return {
         name: localEnum.name,
@@ -32,7 +32,7 @@ export function localEnumToRemoteEnum(
 }
 
 export function localViewToRemoteView(
-    localView: LocalViewDefinition
+    localView: LocalViewDefinition,
 ): ViewDefinition {
     return {
         name: localView.name,
@@ -42,7 +42,7 @@ export function localViewToRemoteView(
 }
 
 export function localColumnToRemoteColumn(
-    localColumn: LocalColumnDefinition
+    localColumn: LocalColumnDefinition,
 ): ColumnDefinition {
     return {
         name: localColumn.name,
@@ -63,7 +63,7 @@ export function localColumnToRemoteColumn(
 }
 
 export function localConstraintToRemoteConstraint(
-    localConstraint: LocalConstraintDefinition
+    localConstraint: LocalConstraintDefinition,
 ): ConstraintDefinition {
     return {
         name: localConstraint.name,
@@ -77,7 +77,7 @@ export function localConstraintToRemoteConstraint(
 }
 
 export function localIndexToRemoteIndex(
-    localIndex: LocalIndexDefinition
+    localIndex: LocalIndexDefinition,
 ): IndexDefinition {
     return {
         name: localIndex.name,
@@ -98,7 +98,7 @@ export function localIndexToRemoteIndex(
 }
 
 export function localForeignKeyToRemoteForeignKey(
-    localForeignKey: LocalForeignKeyDefinition
+    localForeignKey: LocalForeignKeyDefinition,
 ): ForeignKeyDefinition {
     return {
         name: localForeignKey.name,
@@ -113,7 +113,7 @@ export function localForeignKeyToRemoteForeignKey(
 }
 
 export function localTriggerToRemoteTrigger(
-    localTrigger: LocalTriggerDefinition
+    localTrigger: LocalTriggerDefinition,
 ): TriggerDefinition {
     return {
         name: localTrigger.name,
@@ -128,7 +128,7 @@ export function localTriggerToRemoteTrigger(
 }
 
 export function localTableToRemoteTable(
-    localTable: LocalTableDefinition
+    localTable: LocalTableDefinition,
 ): TableDefinition {
     return {
         name: localTable.name,
@@ -146,7 +146,7 @@ export function localTableToRemoteTable(
 }
 
 export function localSchemaToRemoteSchema(
-    localSchema: LocalSchema
+    localSchema: LocalSchema,
 ): RemoteSchema {
     return {
         schema: 'public',

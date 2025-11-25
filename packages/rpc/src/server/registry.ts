@@ -16,7 +16,7 @@ export class Registry<InitialContext = any, Context = any> {
     initialContext: InitialContext
     middleware: (
         initialContext: InitialContext,
-        req: RpcRequest
+        req: RpcRequest,
     ) => Promise<Context>
 
     // biome-ignore lint/suspicious/noExplicitAny: Default is any for ease of use
@@ -26,7 +26,7 @@ export class Registry<InitialContext = any, Context = any> {
         initialContext: InitialContext
         middleware: (
             initialContext: InitialContext,
-            req: RpcRequest
+            req: RpcRequest,
         ) => Promise<Context>
     }) {
         this.initialContext = opts.initialContext
@@ -40,7 +40,7 @@ export class Registry<InitialContext = any, Context = any> {
             ProcedureParams<P>,
             ProcedureInput<I>,
             ProcedureOutput<O>
-        >
+        >,
     ): Registry<InitialContext, Context> {
         const impl: RegistryImplementation<InitialContext, Context, P, I, O> = {
             initialContext: this.initialContext,
@@ -56,7 +56,7 @@ export class Registry<InitialContext = any, Context = any> {
     }
 
     merge(
-        registry: Registry<InitialContext, Context>
+        registry: Registry<InitialContext, Context>,
     ): Registry<InitialContext, Context> {
         this.implementations.push(...registry.implementations)
         return this
@@ -64,7 +64,7 @@ export class Registry<InitialContext = any, Context = any> {
 
     match(
         method: HttpMethod | null,
-        path: string
+        path: string,
     ):
         | (RegistryImplementation & { params: Record<string, string> })
         | undefined {

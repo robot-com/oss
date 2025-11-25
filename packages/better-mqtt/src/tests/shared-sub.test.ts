@@ -1,6 +1,6 @@
+import assert from 'node:assert'
 import { test } from 'node:test'
-import assert from 'assert'
-import { setTimeout } from 'timers/promises'
+import { setTimeout } from 'node:timers/promises'
 import { BetterMQTT } from '..'
 import { connectOptions, TEST_TIMEOUT } from './options'
 

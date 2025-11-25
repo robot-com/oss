@@ -1,8 +1,8 @@
 import { createInbox, headers, type NatsConnection } from '@nats-io/nats-core'
-import type { RPCClient } from '.'
 import { RPCError } from '../error'
 import { createPathFromParams } from '../procedure'
 import type { Procedure, ProcedureOutput, ProcedureParams } from '../types'
+import type { RPCClient } from '.'
 
 export type RPCClientOptions = {
     nats: NatsConnection
@@ -15,18 +15,18 @@ export type CallOptions<P, I> = {
     timeout?: number
 } & (P extends null | undefined
     ? {
-        params?: P
-    }
+          params?: P
+      }
     : {
-        params: P
-    }) &
+          params: P
+      }) &
     (I extends null | undefined
         ? {
-            input?: I
-        }
+              input?: I
+          }
         : {
-            input: I
-        })
+              input: I
+          })
 export class RPCClientNATS implements RPCClient {
     opts: RPCClientOptions
 
@@ -39,7 +39,7 @@ export class RPCClientNATS implements RPCClient {
         opts: CallOptions<
             ProcedureParams<T['paramsSchema']>,
             ProcedureParams<T['inputSchema']>
-        >
+        >,
     ): Promise<ProcedureOutput<T['outputSchema']>> {
         return new Promise<ProcedureOutput<T['outputSchema']>>(
             (resolve, reject) => {
@@ -61,7 +61,7 @@ export class RPCClientNATS implements RPCClient {
                                 if (body.status < 200 || body.status >= 300) {
                                     clearTimeout(timer)
                                     reject(
-                                        new RPCError(body.error, body.message)
+                                        new RPCError(body.error, body.message),
                                     )
                                 } else {
                                     clearTimeout(timer)
@@ -88,7 +88,7 @@ export class RPCClientNATS implements RPCClient {
                     const h = headers()
                     if (this.opts.headers) {
                         for (const [key, value] of Object.entries(
-                            this.opts.headers
+                            this.opts.headers,
                         )) {
                             h.set(key, value)
                         }
@@ -98,7 +98,7 @@ export class RPCClientNATS implements RPCClient {
                         new TextEncoder().encode(JSON.stringify(payload)),
                         {
                             headers: h,
-                        }
+                        },
                     )
                 } catch (error) {
                     clearTimeout(timer)
@@ -115,7 +115,7 @@ export class RPCClientNATS implements RPCClient {
                     clearTimeout(timer)
                     reject(new Error('Aborted'))
                 })
-            }
+            },
         )
     }
 }

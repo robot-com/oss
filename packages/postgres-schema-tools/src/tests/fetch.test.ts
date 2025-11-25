@@ -205,10 +205,10 @@ test('fetch advanced indexes (composite, order, partial)', async () => {
         )
     `)
     await client.query(
-        'CREATE UNIQUE INDEX idx_name_cat ON test (name ASC, category DESC)'
+        'CREATE UNIQUE INDEX idx_name_cat ON test (name ASC, category DESC)',
     )
     await client.query(
-        'CREATE INDEX idx_active ON test (id) WHERE deleted_at IS NULL'
+        'CREATE INDEX idx_active ON test (id) WHERE deleted_at IS NULL',
     )
 
     const schema = await fetchSchemaPgLite(client)
@@ -241,7 +241,7 @@ test('fetch enums and views', async () => {
     await client.query("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')")
     await client.query('CREATE TABLE person (name TEXT, current_mood mood)')
     await client.query(
-        "CREATE VIEW happy_people AS SELECT name FROM person WHERE current_mood = 'happy'"
+        "CREATE VIEW happy_people AS SELECT name FROM person WHERE current_mood = 'happy'",
     )
 
     const schema = await fetchSchemaPgLite(client)
@@ -259,7 +259,7 @@ test('fetch enums and views', async () => {
     const personTable = schema.tables.find((t) => t.name === 'person')
     assert.ok(personTable)
     const moodColumn = personTable.columns.find(
-        (c) => c.name === 'current_mood'
+        (c) => c.name === 'current_mood',
     )
     assert.ok(moodColumn)
     assert.equal(moodColumn.data_type, 'USER-DEFINED')
@@ -313,35 +313,35 @@ test('fetch comments/descriptions for all object types', async () => {
     await client.query("COMMENT ON TYPE status IS 'The status of an entity.'")
 
     await client.query(
-        'CREATE TABLE test (id INT PRIMARY KEY, name TEXT, parent_id INT)'
+        'CREATE TABLE test (id INT PRIMARY KEY, name TEXT, parent_id INT)',
     )
     await client.query("COMMENT ON TABLE test IS 'This is a test table.'")
     await client.query(
-        "COMMENT ON COLUMN test.name IS 'The name of the entity.'"
+        "COMMENT ON COLUMN test.name IS 'The name of the entity.'",
     )
 
     await client.query(
-        "ALTER TABLE test ADD CONSTRAINT name_not_empty CHECK (name <> '')"
+        "ALTER TABLE test ADD CONSTRAINT name_not_empty CHECK (name <> '')",
     )
     await client.query(
-        "COMMENT ON CONSTRAINT name_not_empty ON test IS 'Name cannot be empty.'"
+        "COMMENT ON CONSTRAINT name_not_empty ON test IS 'Name cannot be empty.'",
     )
 
     await client.query(
-        'ALTER TABLE test ADD CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES test(id)'
+        'ALTER TABLE test ADD CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES test(id)',
     )
     await client.query(
-        "COMMENT ON CONSTRAINT fk_parent ON test IS 'Self-referencing parent.' "
+        "COMMENT ON CONSTRAINT fk_parent ON test IS 'Self-referencing parent.' ",
     )
 
     await client.query('CREATE INDEX idx_test_name ON test (name)')
     await client.query(
-        "COMMENT ON INDEX idx_test_name IS 'Index for fast name lookup.'"
+        "COMMENT ON INDEX idx_test_name IS 'Index for fast name lookup.'",
     )
 
     await client.query('CREATE VIEW test_view AS SELECT id FROM test')
     await client.query(
-        "COMMENT ON VIEW test_view IS 'A view of the test table.'"
+        "COMMENT ON VIEW test_view IS 'A view of the test table.'",
     )
 
     const schema = await fetchSchemaPgLite(client)
@@ -354,19 +354,19 @@ test('fetch comments/descriptions for all object types', async () => {
     assert.equal(table.description, 'This is a test table.')
     assert.equal(
         table.columns.find((c) => c.name === 'name')?.description,
-        'The name of the entity.'
+        'The name of the entity.',
     )
     assert.equal(
         table.constraints.find((c) => c.name === 'name_not_empty')?.description,
-        'Name cannot be empty.'
+        'Name cannot be empty.',
     )
     assert.equal(
         table.indexes.find((i) => i.name === 'idx_test_name')?.description,
-        'Index for fast name lookup.'
+        'Index for fast name lookup.',
     )
     assert.equal(
         table.foreign_keys.find((fk) => fk.name === 'fk_parent')?.description,
-        'Self-referencing parent.'
+        'Self-referencing parent.',
     )
 })
 
@@ -398,7 +398,7 @@ test('kitchen sink: fetch schema with multiple interconnected features', async (
         )
     `)
     await client.query(
-        'CREATE INDEX idx_posts_author ON posts (author_id, published_at DESC)'
+        'CREATE INDEX idx_posts_author ON posts (author_id, published_at DESC)',
     )
 
     // 4. Trigger
@@ -494,11 +494,11 @@ test('fetch table with various other data types (UUID, BYTEA, INET)', async () =
     assert.equal(table.columns.find((c) => c.name === 'id')?.data_type, 'uuid')
     assert.equal(
         table.columns.find((c) => c.name === 'data')?.data_type,
-        'bytea'
+        'bytea',
     )
     assert.equal(
         table.columns.find((c) => c.name === 'last_ip')?.data_type,
-        'inet'
+        'inet',
     )
 })
 
@@ -532,7 +532,7 @@ test('fetch table with a composite UNIQUE constraint', async () => {
 test('fetch table with a UNIQUE constraint with NULLS NOT DISTINCT', async () => {
     const client = (await createLocalDatabase({})).$client
     await client.query(
-        'CREATE TABLE test (name TEXT UNIQUE NULLS NOT DISTINCT)'
+        'CREATE TABLE test (name TEXT UNIQUE NULLS NOT DISTINCT)',
     )
     const schema = await fetchSchemaPgLite(client)
     const table = schema.tables[0]
@@ -562,7 +562,7 @@ test('fetch index on an expression', async () => {
     const index = table.indexes[0]
     assert.equal(
         index.definition,
-        'CREATE INDEX idx_lower_email ON public.users USING btree (lower(email))'
+        'CREATE INDEX idx_lower_email ON public.users USING btree (lower(email))',
     )
     assert.equal(index.columns.length, 0) // pg_attribute doesn't link expressions
 })
@@ -606,7 +606,7 @@ test('fetch composite foreign key', async () => {
 test('fetch foreign key with ON DELETE SET NULL and ON UPDATE SET DEFAULT', async () => {
     const client = (await createLocalDatabase({})).$client
     await client.query(
-        "CREATE TABLE users (id INT PRIMARY KEY, name TEXT DEFAULT 'guest')"
+        "CREATE TABLE users (id INT PRIMARY KEY, name TEXT DEFAULT 'guest')",
     )
     await client.query(`
         CREATE TABLE posts (
@@ -762,10 +762,10 @@ test('fetch table with multiple check constraints', async () => {
     const table = schema.tables[0]
     assert.equal(table.constraints.length, 2)
     const priceCheck = table.constraints.find((c) =>
-        c.definition.includes('price')
+        c.definition.includes('price'),
     )
     const discountCheck = table.constraints.find((c) =>
-        c.definition.includes('discount')
+        c.definition.includes('discount'),
     )
     assert.ok(priceCheck)
     assert.ok(discountCheck)

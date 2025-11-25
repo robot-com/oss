@@ -6,7 +6,9 @@ import path from 'node:path'
  * The parsed contents of the root `package.json` file.
  * @type {Record<string, any> | null}
  */
-const pkg = JSON.parse(await readFile('./dist/package.json', 'utf-8').catch(() => 'null'))
+const pkg = JSON.parse(
+    await readFile('./dist/package.json', 'utf-8').catch(() => 'null'),
+)
 
 if (!pkg) {
     throw new Error('No package.json found. Please build your package first.')
@@ -18,7 +20,9 @@ if (pkg.private) {
 }
 
 const localVersion = pkg.version
-const remotePkg = await fetch(`https://registry.npmjs.org/${pkg.name}/latest`).then(res => res.json())
+const remotePkg = await fetch(
+    `https://registry.npmjs.org/${pkg.name}/latest`,
+).then((res) => res.json())
 const remoteVersion = remotePkg.version
 
 if (localVersion === remoteVersion) {
@@ -30,7 +34,10 @@ if (localVersion === remoteVersion) {
     const moreArgs = process.argv.slice(2)
     const npmArgs = ['publish', ...moreArgs]
     console.info('$', 'npm', ...npmArgs)
-    const p = spawn('npm', npmArgs, { stdio: 'inherit', cwd: path.resolve('./dist') })
+    const p = spawn('npm', npmArgs, {
+        stdio: 'inherit',
+        cwd: path.resolve('./dist'),
+    })
 
     const { promise, resolve, reject } = Promise.withResolvers()
 

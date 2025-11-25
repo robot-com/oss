@@ -18,7 +18,7 @@ export function defineProcedure<
     I extends ZodType | undefined = undefined,
     O extends ZodType = ZodType,
 >(
-    options: ProcedureOptions<P, I, O>
+    options: ProcedureOptions<P, I, O>,
 ): Procedure<
     P extends ZodType ? P : ZodNull,
     I extends ZodType ? I : ZodNull,
@@ -45,7 +45,7 @@ const mapHTTPMethod = {
 
 export function createPathFromParams(
     procedure: Procedure,
-    params: Record<string, string> = {}
+    params: Record<string, string> = {},
 ): string {
     const segments = procedure.path.split('.')
     const path = segments.map((segment) => {

@@ -64,6 +64,6 @@ export async function writeDistPackageJson(pkg) {
 
     await writeFile(
         './dist/package.json',
-        JSON.stringify(publishablePkgJson, null, 2)
+        JSON.stringify(publishablePkgJson, null, 2),
     )
 }

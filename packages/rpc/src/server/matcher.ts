@@ -33,7 +33,7 @@ export function createRpcMatcher(procedure: Procedure): Matcher {
         } else {
             assert(
                 validSegmentNameRegex.test(segment),
-                `Invalid segment name: ${segment}`
+                `Invalid segment name: ${segment}`,
             )
 
             httpExpr.push(segment)

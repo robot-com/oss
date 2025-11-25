@@ -156,7 +156,7 @@ test('push table with identity and generated columns', async () => {
     assert.equal(domainCol.is_generated, true)
     assert.equal(
         domainCol.generation_expression,
-        "split_part(email, '@'::text, 2)"
+        "split_part(email, '@'::text, 2)",
     )
 })
 
@@ -398,7 +398,7 @@ test('push table with indexes', async () => {
     assert.equal(emailIndex.is_unique, true)
 
     const createdIndex = table.indexes.find(
-        (i) => i.name === 'idx_users_created_at'
+        (i) => i.name === 'idx_users_created_at',
     )
     assert.ok(createdIndex)
     assert.equal(createdIndex.is_unique, false)
@@ -566,7 +566,7 @@ test('push multiple tables with dependencies', async () => {
     assert.equal(schemaAfter.tables.length, 2)
 
     const categoriesTable = schemaAfter.tables.find(
-        (t) => t.name === 'categories'
+        (t) => t.name === 'categories',
     )
     const productsTable = schemaAfter.tables.find((t) => t.name === 'products')
     assert.ok(categoriesTable)

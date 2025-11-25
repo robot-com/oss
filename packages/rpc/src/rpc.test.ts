@@ -1,7 +1,7 @@
-import { jetstream } from '@nats-io/jetstream'
-import { connect } from '@nats-io/transport-node'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { jetstream } from '@nats-io/jetstream'
+import { connect } from '@nats-io/transport-node'
 import { z } from 'zod'
 import { RPCClientNATS } from './client'
 import { RPCError } from './error'
@@ -66,7 +66,7 @@ test('api', async () => {
     assert(out.data.name === 'test')
     assert(match.procedure.outputSchema.parse(out.data).name === 'test')
     assert(
-        match.procedure.inputSchema.parse({ filter: 'test' }).filter === 'test'
+        match.procedure.inputSchema.parse({ filter: 'test' }).filter === 'test',
     )
     assert(match.procedure.paramsSchema.parse(match.params).id === '123')
 })

@@ -79,7 +79,7 @@ export type Matcher = {
     paramsNames: string[]
     match: (
         method: HttpMethod | null,
-        path: string
+        path: string,
     ) => { params: Record<string, string> } | null
 }
 
@@ -93,7 +93,7 @@ export type RegistryImplementation<
     initialContext: InitialContext
     middleware: (
         initialContext: InitialContext,
-        req: RpcRequest
+        req: RpcRequest,
     ) => Promise<Context>
     procedure: Procedure<P, I, O>
     matcher: Matcher

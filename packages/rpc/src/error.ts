@@ -82,7 +82,7 @@ export class RPCError extends Error {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-            }
+            },
         )
     }
 

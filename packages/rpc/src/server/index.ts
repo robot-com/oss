@@ -20,7 +20,7 @@ export type RPCServerOptions = {
 }
 
 export async function startRpcNatsServer(
-    opts: RPCServerOptions
+    opts: RPCServerOptions,
 ): Promise<{ stop: () => Promise<void> }> {
     const js = jetstream(opts.nats)
     const consumer = await js.consumers.get(opts.streamName, opts.consumerName)
@@ -40,7 +40,7 @@ export async function startRpcNatsServer(
 
 async function rpcNatsServerLoop(
     opts: RPCServerOptions,
-    iter: ConsumerMessages
+    iter: ConsumerMessages,
 ) {
     for await (const m of iter) {
         void handleMessage(opts, m).catch((err) => {
@@ -72,8 +72,8 @@ async function handleMessage(opts: RPCServerOptions, msg: JsMsg) {
                 JSON.stringify({
                     status,
                     ...data,
-                })
-            )
+                }),
+            ),
         )
     }
 
@@ -153,7 +153,7 @@ async function executeProcedure(
     msg: JsMsg,
 
     ack: () => Promise<void>,
-    nack: (retry?: number) => Promise<void>
+    nack: (retry?: number) => Promise<void>,
 ): Promise<{
     status: number
     data?: Record<string, unknown>
