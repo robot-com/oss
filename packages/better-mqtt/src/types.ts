@@ -9,19 +9,19 @@ export interface BetterMQTTMessage<T> {
  */
 export interface SubscriptionOptions {
     /**
-     * MQTT QoS
+     * MQTT QoS. Default: 2
      */
     qos: 0 | 1 | 2
     /**
-     * MQTT Retain handling
+     * MQTT Retain handling. Default: 2
      */
     rh: 0 | 1 | 2
     /**
-     * MQTT Retain as published
+     * MQTT Retain as published. Default: false
      */
-    rap?: boolean
+    rap: boolean
     /**
-     * MQTT No local
+     * MQTT No local. Default: false
      */
-    nl?: boolean
+    nl: boolean
 }

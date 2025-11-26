@@ -48,3 +48,13 @@
 - Added `qos` and `retain` options to `publish`
 - Improved handling of instance termination
 - Added `endAsync` function
+
+## 0.3.2
+
+- Fix bug with subscription options
+
+  **The bug**:
+
+  If the mqtt client received a optional value as `undefined`, for example `{ qos: 2, rh: undefined }`,
+  it would fail to subscribe. The solution is to pass a default value or not include the key at all.
+  For example just using `{ qos: 2 }`.
