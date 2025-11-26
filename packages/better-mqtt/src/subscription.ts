@@ -34,11 +34,9 @@ export class Subscription<T = string> extends EventEmitter<
         this.mqtt = opts.mqtt
         this.topic = opts.topic
         this.options = {
-            qos: 2,
-            rh: 2,
-            rap: false,
-            nl: false,
             ...opts.options,
+            qos: opts.options?.qos ?? 2,
+            rh: opts.options?.rh ?? 2,
         }
         this.parser = opts.parser
 

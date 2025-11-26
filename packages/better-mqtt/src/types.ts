@@ -19,9 +19,9 @@ export interface SubscriptionOptions {
     /**
      * MQTT Retain as published
      */
-    rap: boolean
+    rap?: boolean
     /**
      * MQTT No local
      */
-    nl: boolean
+    nl?: boolean
 }
