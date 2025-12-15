@@ -8,7 +8,12 @@ import {
     useRef,
     useState,
 } from 'react'
-import type { BetterMQTT, SubscriptionOptions } from '..'
+import type {
+    BetterMQTT,
+    BetterMQTTMessage,
+    Subscription,
+    SubscriptionOptions,
+} from '..'
 
 const ctx = createContext<BetterMQTT | null>(null)
 
@@ -45,6 +50,10 @@ export function useMQTTStatus() {
     return status
 }
 
+function areOptionsEqual(a: SubscriptionOptions, b: SubscriptionOptions) {
+    return a.nl === b.nl && a.qos === b.qos && a.rap === b.rap && a.rh === b.rh
+}
+
 export function useMQTTSubscription<T>(
     topic: string,
     parser: (message: Buffer) => T,
@@ -64,35 +73,78 @@ export function useMQTTSubscription<T>(
         return parserRef.current(message)
     }, [])
 
+    // Ref to hold the active subscription and pending cleanup timeout
+    // uniquely for this component instance.
+    const subRef = useRef<{
+        sub: Subscription<T> | null
+        timeout: NodeJS.Timeout | null
+    }>({ sub: null, timeout: null })
+
+    // Destructure options to ensure we depend on primitive values, 
+    // avoiding re-renders when the 'opts' object reference changes.
+    const enabled = opts?.enabled ?? true
+    const nl = opts?.nl ?? false
+    const qos = opts?.qos ?? 2
+    const rap = opts?.rap ?? false
+    const rh = opts?.rh ?? 2
+
     useEffect(() => {
-        if (opts?.enabled === false) {
+        if (!enabled) {
             return
         }
 
-        const sub = client.subscribe<T>(topic, parserMemoed, {
-            nl: opts?.nl,
-            qos: opts?.qos,
-            rap: opts?.rap,
-            rh: opts?.rh,
-        })
+        const currentOptions: SubscriptionOptions = { nl, qos, rap, rh }
+        let sub: Subscription<T>
 
-        sub.on('message', (message) => {
+        // Check if we can reuse the existing subscription from the ref
+        // This handles React Strict Mode "Unmount -> Remount" cycle
+        if (
+            subRef.current.sub &&
+            subRef.current.sub.topic === topic &&
+            areOptionsEqual(subRef.current.sub.options, currentOptions)
+        ) {
+            sub = subRef.current.sub
+            // Cancel any pending destruction
+            if (subRef.current.timeout) {
+                clearTimeout(subRef.current.timeout)
+                subRef.current.timeout = null
+            }
+        } else {
+            // Create a new subscription
+            sub = client.subscribe<T>(topic, parserMemoed, {
+                nl,
+                qos,
+                rap,
+                rh,
+            })
+            subRef.current.sub = sub
+        }
+
+        const onMessage = (message: BetterMQTTMessage<T>) => {
             onMessageRef.current(message.content)
-        })
+        }
+
+        sub.on('message', onMessage)
 
         return () => {
-            sub.end()
+            // Immediately stop listening to avoid side-effects in unmounted component
+            sub.off('message', onMessage)
+
+            // Defer the actual unsubscription to the next tick.
+            // If the component is immediately re-mounted (e.g. Strict Mode),
+            // the effect setup will run, see the ref, and cancel this timeout.
+            const timeout = setTimeout(() => {
+                sub.end()
+                // Only nullify if it's still the exact same subscription
+                if (subRef.current.sub === sub) {
+                    subRef.current.sub = null
+                    subRef.current.timeout = null
+                }
+            }, 0)
+
+            subRef.current.timeout = timeout
         }
-    }, [
-        client,
-        topic,
-        parserMemoed,
-        opts?.enabled,
-        opts?.nl,
-        opts?.qos,
-        opts?.rap,
-        opts?.rh,
-    ])
+    }, [client, topic, parserMemoed, enabled, nl, qos, rap, rh])
 }
 
 export function useMQTTError(
