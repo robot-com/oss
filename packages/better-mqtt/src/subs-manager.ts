@@ -55,7 +55,7 @@ class SubscriptionGroup {
         this.subs.add(sub)
 
         // If we have a retained message, we need to send it to the new subscription
-        if (this.retainedMessage) {
+        if (this.retainedMessage && sub.options.rh < 2) {
             sub.handleMessage(
                 this.retainedMessage.content,
                 this.retainedMessage.topic,
