@@ -23,7 +23,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: "24.x"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
@@ -39,15 +39,13 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run build
       - run: pnpm -r run publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Show npm debug log
         if: failure()
         run: |
