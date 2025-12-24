@@ -209,7 +209,10 @@ export function fetchSchemaDrizzleORM(
                 table.columns.push({
                     name: column.name,
                     data_type: mapDrizzleTypeToPostgres(column.dataType),
-                    default: mapDefaultValueToSql(column.default),
+                    default:
+                        column.default !== undefined
+                            ? mapDefaultValueToSql(column.default)
+                            : undefined,
                     is_nullable: !column.notNull && !column.primary,
                     is_identity: column.isUnique,
                 })
