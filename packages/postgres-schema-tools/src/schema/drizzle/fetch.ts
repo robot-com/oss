@@ -29,6 +29,70 @@ export type DrizzleColumnType =
     | 'localDate'
     | 'localDateTime'
 
+/**
+ * Maps Drizzle internal column type names (like 'PgNumeric', 'PgUUID') to PostgreSQL SQL types
+ */
+export function mapDrizzleColumnTypeToPostgres(columnType: string): string {
+    // Handle array types first
+    if (columnType.startsWith('PgArray')) {
+        // Extract the element type from PgArray<PgInteger> format
+        const match = columnType.match(/PgArray<(.+)>/)
+        if (match) {
+            const elementType = mapDrizzleColumnTypeToPostgres(match[1])
+            return `${elementType}[]`
+        }
+        return 'text[]'
+    }
+
+    const typeMap: Record<string, string> = {
+        // Text types
+        PgText: 'text',
+        PgVarchar: 'character varying',
+        PgChar: 'character',
+
+        // Numeric types
+        PgSmallInt: 'smallint',
+        PgInteger: 'integer',
+        PgBigInt53: 'bigint',
+        PgBigInt64: 'bigint',
+        PgSerial: 'integer',
+        PgBigSerial53: 'bigint',
+        PgBigSerial64: 'bigint',
+        PgReal: 'real',
+        PgDoublePrecision: 'double precision',
+        PgNumeric: 'numeric',
+        PgDecimal: 'numeric',
+
+        // Boolean
+        PgBoolean: 'boolean',
+
+        // Date/Time types
+        PgTimestamp: 'timestamp without time zone',
+        PgTimestampString: 'timestamp without time zone',
+        PgDate: 'date',
+        PgTime: 'time without time zone',
+        PgInterval: 'interval',
+
+        // UUID
+        PgUUID: 'uuid',
+
+        // JSON types
+        PgJson: 'json',
+        PgJsonb: 'jsonb',
+
+        // Binary
+        PgBytea: 'bytea',
+
+        // Other types
+        PgInet: 'inet',
+        PgCidr: 'cidr',
+        PgMacaddr: 'macaddr',
+        PgMacaddr8: 'macaddr8',
+    }
+
+    return typeMap[columnType] || 'text'
+}
+
 export function mapDrizzleTypeToPostgres(type: DrizzleColumnType): string {
     switch (type) {
         case 'string':
@@ -206,19 +270,52 @@ export function fetchSchemaDrizzleORM(
             // 1. Map Columns
             const columns = getTableColumns(value) as Record<string, PgColumn>
             for (const column of Object.values(columns)) {
+                // Get the actual SQL type from Drizzle column
+                let sqlType: string
+
+                // Check if this is an array column
+                if (column.dataType === 'array' && (column as any).baseColumn) {
+                    const baseColumn = (column as any).baseColumn
+                    const baseType = baseColumn.columnType
+                        ? mapDrizzleColumnTypeToPostgres(baseColumn.columnType)
+                        : mapDrizzleTypeToPostgres(baseColumn.dataType)
+                    sqlType = `${baseType}[]`
+                } else if (column.columnType) {
+                    // Try to get more specific type info from the column object
+                    // Access columnType which contains the actual SQL type definition (e.g., 'PgNumeric', 'PgUUID')
+                    sqlType = mapDrizzleColumnTypeToPostgres(column.columnType)
+                } else {
+                    // Fallback to generic type mapping
+                    sqlType = mapDrizzleTypeToPostgres(column.dataType)
+                }
+
                 table.columns.push({
                     name: column.name,
-                    data_type: mapDrizzleTypeToPostgres(column.dataType),
+                    data_type: sqlType,
                     default:
                         column.default !== undefined
                             ? mapDefaultValueToSql(column.default)
                             : undefined,
                     is_nullable: !column.notNull && !column.primary,
-                    is_identity: column.isUnique,
+                    // Note: is_identity should be set for GENERATED ... AS IDENTITY columns
+                    // Drizzle doesn't currently expose this information, so we leave it undefined
+                    is_identity: undefined,
                 })
             }
 
             // 2. Map Primary Keys -> Constraints
+            // First check for single-column primary keys (columns with .primaryKey())
+            const primaryColumns = Object.values(columns).filter((c) => c.primary)
+            if (primaryColumns.length > 0 && tableConfig.primaryKeys.length === 0) {
+                // Single column primary key
+                table.constraints?.push({
+                    name: `${tableName}_pkey`,
+                    type: 'PRIMARY KEY',
+                    columns: primaryColumns.map((c) => c.name),
+                })
+            }
+
+            // Then handle composite primary keys defined via primaryKey()
             for (const pk of tableConfig.primaryKeys) {
                 table.constraints?.push({
                     name: pk.getName(),

@@ -1115,7 +1115,7 @@ export const saasSchema: LocalSchema = {
                 {
                     name: 'idx_tenant_members_role',
                     is_unique: false,
-                    columns: [{ name: 'tenant_id', name: 'role' }],
+                    columns: [{ name: 'tenant_id' }, { name: 'role' }],
                 },
             ],
             foreign_keys: [

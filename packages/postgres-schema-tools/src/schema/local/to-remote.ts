@@ -72,7 +72,7 @@ export function localConstraintToRemoteConstraint(
         definition: '', // Not available in local schema
         columns: localConstraint.columns ?? [],
         check_predicate: localConstraint.check_predicate ?? null,
-        nulls_not_distinct: localConstraint.nulls_not_distinct ?? false,
+        nulls_not_distinct: localConstraint.nulls_not_distinct,
     }
 }
 

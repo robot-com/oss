@@ -141,7 +141,7 @@ export function createTable(def: LocalTableDefinition): string[] {
         .join(',\n')
 
     const constraintDefs = (def.constraints ?? [])
-        .map((con) => `  ${formatConstraintDefinition(con)}`)
+        .map((con) => `  ${formatConstraintDefinition(con, true)}`)
         .join(',\n')
 
     const parts = [columnDefs]
@@ -406,7 +406,10 @@ export function deleteColumn(tableName: string, columnName: string): string[] {
 
 // --- CONSTRAINTS (PRIMARY KEY, UNIQUE, CHECK) ---
 
-function formatConstraintDefinition(con: LocalConstraintDefinition): string {
+function formatConstraintDefinition(
+    con: LocalConstraintDefinition,
+    inline = false,
+): string {
     let def = `CONSTRAINT ${quote(con.name)}`
     if (con.type === 'CHECK' && con.check_predicate) {
         def += ` CHECK (${con.check_predicate})`
@@ -415,6 +418,12 @@ function formatConstraintDefinition(con: LocalConstraintDefinition): string {
         if (con.columns && con.columns.length > 0) {
             def += ` (${con.columns.map(quote).join(', ')})`
         }
+        // TODO: Add NULLS NOT DISTINCT for UNIQUE constraints if specified
+        // Note: NULLS NOT DISTINCT requires PostgreSQL 15+ and is not currently supported by PGlite
+        // Uncomment when using a database that supports this feature:
+        // if (con.type === 'UNIQUE' && con.nulls_not_distinct && !inline) {
+        //     def += ' NULLS NOT DISTINCT'
+        // }
     }
     return def
 }
@@ -544,10 +553,16 @@ export const deleteForeignKey = deleteConstraint
 
 // --- INDEXES ---
 
-function formatIndexColumn(col: LocalIndexColumn): string {
+function formatIndexColumn(
+    col: LocalIndexColumn,
+    supportsOrdering: boolean,
+): string {
     const parts = [quote(col.name)]
-    if (col.sort_order) parts.push(col.sort_order)
-    if (col.nulls_order) parts.push(col.nulls_order)
+    // GIN, GIST, and other special index types don't support ordering
+    if (supportsOrdering) {
+        if (col.sort_order) parts.push(col.sort_order)
+        if (col.nulls_order) parts.push(col.nulls_order)
+    }
     return parts.join(' ')
 }
 
@@ -562,7 +577,17 @@ export function createIndex(
     def: LocalIndexDefinition,
 ): string[] {
     const unique = def.is_unique ? 'UNIQUE ' : ''
-    const columns = def.columns.map(formatIndexColumn).join(', ')
+    // GIN, GIST, BRIN, and hash indexes don't support column ordering
+    const indexType = def.index_type?.toLowerCase()
+    const supportsOrdering = !(
+        indexType === 'gin' ||
+        indexType === 'gist' ||
+        indexType === 'brin' ||
+        indexType === 'hash'
+    )
+    const columns = def.columns
+        .map((col) => formatIndexColumn(col, supportsOrdering))
+        .join(', ')
     const using = def.index_type ? ` USING ${def.index_type}` : ''
     const predicate = def.predicate ? ` WHERE ${def.predicate}` : ''
 

@@ -169,12 +169,19 @@ export function createJsonDiffReport(
         }
     }
 
+    const enumsDiff = diffSimpleItems(schemaA.enums, schemaB.enums)
+    const viewsDiff = diffSimpleItems(schemaA.views, schemaB.views)
+
     const hasChanges =
         modifiedTables.length > 0 ||
         tablesDiff.added.length > 0 ||
         tablesDiff.removed.length > 0 ||
-        schemaA.enums.length !== schemaB.enums.length ||
-        schemaA.views.length !== schemaB.views.length
+        enumsDiff.added.length > 0 ||
+        enumsDiff.removed.length > 0 ||
+        enumsDiff.modified.length > 0 ||
+        viewsDiff.added.length > 0 ||
+        viewsDiff.removed.length > 0 ||
+        viewsDiff.modified.length > 0
 
     const report: JsonReport = {
         has_changes: hasChanges,
@@ -183,8 +190,8 @@ export function createJsonDiffReport(
             to: schemaB.schema,
         },
         generated_at: new Date().toISOString(),
-        enums: diffSimpleItems(schemaA.enums, schemaB.enums),
-        views: diffSimpleItems(schemaA.views, schemaB.views),
+        enums: enumsDiff,
+        views: viewsDiff,
         tables: {
             added: tablesDiff.added,
             removed: tablesDiff.removed,

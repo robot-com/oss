@@ -120,8 +120,8 @@ export interface ConstraintDefinition {
     columns: string[]
     /** The predicate for a CHECK constraint, or null if not a CHECK constraint. */
     check_predicate: string | null
-    /** Indicates if the constraint does not consider null values as distinct. */
-    nulls_not_distinct: boolean
+    /** Indicates if the constraint does not consider null values as distinct. Only applies to UNIQUE constraints. */
+    nulls_not_distinct?: boolean
 }
 
 /**

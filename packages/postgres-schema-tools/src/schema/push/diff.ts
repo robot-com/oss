@@ -41,6 +41,12 @@ export function generateMigrationSQL(report: JsonReport): string[][] {
         statements.push(deleteView(v.name))
     })
 
+    // Drop modified views early (they'll be recreated later)
+    // This prevents dependency issues when modifying tables/FKs
+    report.views.modified.forEach((v) => {
+        statements.push(deleteView(v.from.name))
+    })
+
     // --- --- ---
 
     // Create new enums
@@ -62,6 +68,21 @@ export function generateMigrationSQL(report: JsonReport): string[][] {
 
     report.tables.added.forEach((t) => {
         statements.push(createTable(t))
+        // Create indexes for the new table
+        ;(t.indexes ?? []).forEach((i) => {
+            // Skip constraint indexes (they are created automatically)
+            if (!i.is_constraint_index) {
+                statements.push(createIndex(t.name, i))
+            }
+        })
+        // Create foreign keys for the new table
+        ;(t.foreign_keys ?? []).forEach((fk) => {
+            statements.push(createForeignKey(t.name, fk))
+        })
+        // Create triggers for the new table
+        ;(t.triggers ?? []).forEach((tr) => {
+            statements.push(createTrigger(t.name, tr))
+        })
     })
 
     report.tables.modified.forEach((t) => {
