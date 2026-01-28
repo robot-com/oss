@@ -272,6 +272,7 @@ export function fetchSchemaDrizzleORM(
             for (const column of Object.values(columns)) {
                 // Get the actual SQL type from Drizzle column
                 let sqlType: string
+                let defaultValue: string | undefined
 
                 // Check if this is an array column
                 if (column.dataType === 'array' && (column as any).baseColumn) {
@@ -280,22 +281,48 @@ export function fetchSchemaDrizzleORM(
                         ? mapDrizzleColumnTypeToPostgres(baseColumn.columnType)
                         : mapDrizzleTypeToPostgres(baseColumn.dataType)
                     sqlType = `${baseType}[]`
+                    defaultValue =
+                        column.default !== undefined
+                            ? mapDefaultValueToSql(column.default)
+                            : undefined
                 } else if (column.columnType) {
-                    // Try to get more specific type info from the column object
-                    // Access columnType which contains the actual SQL type definition (e.g., 'PgNumeric', 'PgUUID')
-                    sqlType = mapDrizzleColumnTypeToPostgres(column.columnType)
+                    // Handle SERIAL and BIGSERIAL types
+                    // These have hasDefault=true but no explicit default value
+                    if (
+                        (column.columnType === 'PgSerial' ||
+                            column.columnType === 'PgBigSerial53' ||
+                            column.columnType === 'PgBigSerial64') &&
+                        (column as any).hasDefault
+                    ) {
+                        // Use SERIAL/BIGSERIAL pseudo-types which automatically create sequences
+                        sqlType =
+                            column.columnType === 'PgSerial'
+                                ? 'serial'
+                                : 'bigserial'
+                        // Don't set a default - SERIAL handles this
+                        defaultValue = undefined
+                    } else {
+                        // Try to get more specific type info from the column object
+                        // Access columnType which contains the actual SQL type definition (e.g., 'PgNumeric', 'PgUUID')
+                        sqlType = mapDrizzleColumnTypeToPostgres(column.columnType)
+                        defaultValue =
+                            column.default !== undefined
+                                ? mapDefaultValueToSql(column.default)
+                                : undefined
+                    }
                 } else {
                     // Fallback to generic type mapping
                     sqlType = mapDrizzleTypeToPostgres(column.dataType)
+                    defaultValue =
+                        column.default !== undefined
+                            ? mapDefaultValueToSql(column.default)
+                            : undefined
                 }
 
                 table.columns.push({
                     name: column.name,
                     data_type: sqlType,
-                    default:
-                        column.default !== undefined
-                            ? mapDefaultValueToSql(column.default)
-                            : undefined,
+                    default: defaultValue,
                     is_nullable: !column.notNull && !column.primary,
                     // Note: is_identity should be set for GENERATED ... AS IDENTITY columns
                     // Drizzle doesn't currently expose this information, so we leave it undefined

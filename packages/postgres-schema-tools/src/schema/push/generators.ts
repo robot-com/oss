@@ -239,6 +239,23 @@ function resolveColumnType(col: LocalColumnDefinition): string {
         const base = resolveArrayBaseType(col.udt_name)
         return `${base}[]`
     }
+
+    // Handle numeric types with precision and scale
+    if (col.data_type === 'numeric' && col.numeric_precision != null) {
+        if (col.numeric_scale != null) {
+            return `numeric(${col.numeric_precision}, ${col.numeric_scale})`
+        }
+        return `numeric(${col.numeric_precision})`
+    }
+
+    // Handle character types with max_length
+    if (
+        (col.data_type === 'character varying' || col.data_type === 'character') &&
+        col.max_length != null
+    ) {
+        return `${col.data_type}(${col.max_length})`
+    }
+
     return col.data_type
 }
 

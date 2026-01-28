@@ -765,11 +765,16 @@ test('drizzle: push Drizzle-generated schema to database and verify round-trip',
     )
 
     // Test FK cascade
-    await client.query("INSERT INTO users (email) VALUES ('test@example.com')")
-    await client.query(
-        "INSERT INTO posts (user_id, title) VALUES (1, 'Test Post')",
+    // Note: Use RETURNING to get the actual inserted ID, since the failed INSERT above
+    // increments the sequence counter
+    const insertResult = await client.query<{ id: number }>(
+        "INSERT INTO users (email) VALUES ('test@example.com') RETURNING id",
     )
-    await client.query('DELETE FROM users WHERE id = 1')
+    const userId = insertResult.rows[0].id
+    await client.query(
+        `INSERT INTO posts (user_id, title) VALUES (${userId}, 'Test Post')`,
+    )
+    await client.query(`DELETE FROM users WHERE id = ${userId}`)
 
     const postCount = await client.query<{ count: string }>(
         'SELECT COUNT(*) as count FROM posts',

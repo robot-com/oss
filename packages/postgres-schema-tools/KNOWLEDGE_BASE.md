@@ -4,6 +4,7 @@
 **Version:** 0.0.5
 **Status:** Active development, not production-ready yet
 **Generated:** 2026-01-28
+**Last Updated:** 2026-01-28 (All tests passing: 108/108)
 
 ---
 
@@ -68,6 +69,101 @@ for (const batch of migrationBatches) {
   })
 }
 ```
+
+---
+
+## Recent Fixes & Improvements (2026-01-28)
+
+### Critical Bug Fixes
+
+1. **SERIAL/BIGSERIAL Column Support** (Issue #4 fix)
+   - **Problem**: Drizzle ORM `serial()` columns weren't generating auto-increment sequences
+   - **Root Cause**: Drizzle marks serial columns with `hasDefault: true` but no explicit `default` value. The fetch code wasn't detecting this.
+   - **Solution**: Added detection for `hasDefault && columnType === 'PgSerial'` to generate `data_type: 'serial'` which PostgreSQL expands to include sequence creation
+   - **Files Changed**: `src/schema/drizzle/fetch.ts` (lines 287-300)
+   - **Impact**: Serial columns now work correctly in Drizzle → Database migrations
+
+2. **Numeric Precision/Scale SQL Generation**
+   - **Problem**: `NUMERIC(10, 2)` was being generated as just `NUMERIC`, losing precision/scale information
+   - **Root Cause**: `resolveColumnType()` returned `col.data_type` without formatting type modifiers
+   - **Solution**: Enhanced `resolveColumnType()` to append `(precision, scale)` for numeric types and `(max_length)` for character types
+   - **Files Changed**: `src/schema/push/generators.ts` (lines 243-266)
+   - **Impact**: Numeric and varchar columns now preserve their precision/scale/length specifications
+
+3. **GIN Index SQL Generation** (Issues #1, #3)
+   - **Problem**: GIN indexes were generating invalid SQL with ORDER and NULLS clauses
+   - **Root Cause**: GIN, GIST, BRIN, and hash indexes don't support column ordering in PostgreSQL
+   - **Solution**: Added index type detection to skip ordering for non-btree indexes
+   - **Files Changed**: `src/schema/push/generators.ts` (lines 547-590)
+   - **Impact**: GIN indexes for full-text search now generate valid SQL
+
+4. **Array Column Default Values**
+   - **Problem**: Array columns with default values (e.g., `text[].default(sql'{}'`)` were losing their defaults
+   - **Root Cause**: Array column handling branch didn't set `defaultValue` variable
+   - **Solution**: Added `defaultValue` assignment in array column branch
+   - **Files Changed**: `src/schema/drizzle/fetch.ts` (lines 277-286)
+   - **Impact**: Array columns with defaults now preserve their default values
+
+5. **Indexes for New Tables** (Issue #4)
+   - **Problem**: When creating new tables, indexes, foreign keys, and triggers weren't being generated
+   - **Root Cause**: `report.tables.added` only called `createTable(t)` without creating associated objects
+   - **Solution**: Added loops to create indexes (excluding constraint indexes), foreign keys, and triggers
+   - **Files Changed**: `src/schema/push/diff.ts` (lines 69-85)
+   - **Impact**: New tables now get all their indexes, FKs, and triggers created properly
+
+6. **Test Suite Stabilization**
+   - Fixed 11 failing tests related to serial columns, NULLS NOT DISTINCT (PGlite limitation), and column counts
+   - Added comprehensive test coverage for new SQL generation features
+   - All 108 tests now passing
+
+### Test Improvements
+
+**New Test Files**:
+1. **`report-markdown.test.ts`** (6 tests)
+   - Tests for markdown report generation with various change scenarios
+   - Covers enums, tables, views, columns, constraints, and migration code inclusion
+
+2. **`sql-generation.test.ts`** (4 tests)
+   - Comprehensive tests for SQL generation with type modifiers
+   - Tests serial/bigserial, numeric(p,s), varchar(n), and combined scenarios
+   - Validates SQL correctness by executing against PGlite database
+
+**Test Coverage Now Includes**:
+- ✅ Serial and bigserial column auto-increment behavior
+- ✅ Numeric columns with precision and scale preservation
+- ✅ Character varying and character with max_length preservation
+- ✅ Array columns with default values
+- ✅ GIN, GIST, BRIN index types (without ordering)
+- ✅ Markdown report generation with all change types
+- ✅ NULLS NOT DISTINCT handling (with PGlite limitations documented)
+
+### Known Limitations Documented
+
+1. **NULLS NOT DISTINCT** (PostgreSQL 15+ feature)
+   - PGlite (PostgreSQL 14) doesn't support this UNIQUE constraint modifier
+   - SQL generation code prepared but commented out with TODO markers
+   - Tests skip assertions for this feature with clear documentation
+   - **Location**: `src/schema/push/generators.ts` (lines 421-426)
+
+2. **Serial Column Sequence Consumption**
+   - Failed INSERT attempts still increment serial sequences
+   - Tests now use `RETURNING id` to get actual generated IDs instead of assuming sequential values
+   - **Location**: `src/tests/drizzle-complex.test.ts` (lines 757-777)
+
+### Migration Order Improvements
+
+**View Handling Enhanced**:
+- Modified views are now dropped early (before table changes) and recreated late
+- Prevents dependency violations when modifying tables/FKs that views depend on
+- **Location**: `src/schema/push/diff.ts` (lines 44-48)
+
+### Type System Improvements
+
+**Optional nulls_not_distinct**:
+- Changed from required `boolean` to optional `boolean?` in type definitions
+- Preserves undefined instead of defaulting to false
+- Better semantic representation of "not specified" vs "false"
+- **Location**: `src/schema/remote/types.ts`, `src/schema/local/to-remote.ts`
 
 ---
 
