@@ -10,6 +10,7 @@ import type { RemoteSchema } from '../schema/remote/types'
 function createEmptySchema(schema = 'public'): RemoteSchema {
     return {
         schema,
+        generated_at: new Date().toISOString(),
         tables: [],
         enums: [],
         views: [],
@@ -405,11 +406,16 @@ test('json: detect constraint index filtering', () => {
                 indexes: [
                     {
                         name: 'users_pkey',
-                        columns: ['id'],
+                        description: null,
+                        definition: 'CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)',
+                        columns: [
+                            { name: 'id', sort_order: 'ASC', nulls_order: 'NULLS LAST' },
+                        ],
                         is_unique: true,
-                        is_primary: true,
                         is_constraint_index: true, // This should be filtered
-                        type: 'btree',
+                        nulls_not_distinct: null,
+                        is_valid: true,
+                        index_type: 'btree',
                         predicate: null,
                     },
                 ],
@@ -475,4 +481,253 @@ test('json: table description change should be detected', () => {
     assert.strictEqual(report.tables.modified.length, 1)
     assert.strictEqual(report.tables.modified[0].description?.from, 'User accounts')
     assert.strictEqual(report.tables.modified[0].description?.to, 'All user accounts in the system')
+})
+
+test('json: indexes with different names but same columns should match semantically', () => {
+    const schemaA: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [
+                    {
+                        name: 'email',
+                        description: null,
+                        position: 1,
+                        data_type: 'text',
+                        is_nullable: false,
+                        default: null,
+                        is_generated: false,
+                        generation_expression: null,
+                        is_identity: false,
+                        identity_generation: null,
+                        max_length: null,
+                        numeric_precision: null,
+                        numeric_scale: null,
+                        udt_name: 'text',
+                    },
+                ],
+                constraints: [],
+                indexes: [
+                    {
+                        name: 'users_email_idx', // Different name
+                        description: null,
+                        definition: '',
+                        is_constraint_index: false,
+                        is_unique: false,
+                        nulls_not_distinct: false,
+                        is_valid: true,
+                        index_type: 'btree',
+                        columns: [{ name: 'email', sort_order: 'ASC', nulls_order: 'NULLS LAST' }],
+                        predicate: null,
+                    },
+                ],
+                foreign_keys: [],
+                triggers: [],
+            },
+        ],
+    }
+    const schemaB: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [
+                    {
+                        name: 'email',
+                        description: null,
+                        position: 1,
+                        data_type: 'text',
+                        is_nullable: false,
+                        default: null,
+                        is_generated: false,
+                        generation_expression: null,
+                        is_identity: false,
+                        identity_generation: null,
+                        max_length: null,
+                        numeric_precision: null,
+                        numeric_scale: null,
+                        udt_name: 'text',
+                    },
+                ],
+                constraints: [],
+                indexes: [
+                    {
+                        name: 'users_email_index', // Different name but same columns
+                        description: null,
+                        definition: 'CREATE INDEX users_email_index ON users (email)',
+                        is_constraint_index: false,
+                        is_unique: false,
+                        nulls_not_distinct: false,
+                        is_valid: true,
+                        index_type: 'btree',
+                        columns: [{ name: 'email', sort_order: 'ASC', nulls_order: 'NULLS LAST' }],
+                        predicate: null,
+                    },
+                ],
+                foreign_keys: [],
+                triggers: [],
+            },
+        ],
+    }
+
+    const report = createJsonDiffReport(schemaA, schemaB)
+
+    // Should NOT detect changes because indexes are semantically identical
+    assert.strictEqual(report.has_changes, false, 'Semantically identical indexes should not cause changes')
+    assert.strictEqual(report.tables.modified.length, 0)
+})
+
+test('json: foreign keys with different names but same structure should match semantically', () => {
+    const schemaA: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [{ name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' }],
+                constraints: [],
+                indexes: [],
+                foreign_keys: [],
+                triggers: [],
+            },
+            {
+                name: 'posts',
+                description: null,
+                columns: [
+                    { name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                    { name: 'user_id', description: null, position: 2, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                ],
+                constraints: [],
+                indexes: [],
+                foreign_keys: [
+                    {
+                        name: 'posts_user_fk', // Different name
+                        description: null,
+                        columns: ['user_id'],
+                        foreign_table: 'users',
+                        foreign_columns: ['id'],
+                        on_update: 'NO ACTION',
+                        on_delete: 'CASCADE',
+                        match_option: 'SIMPLE',
+                    },
+                ],
+                triggers: [],
+            },
+        ],
+    }
+    const schemaB: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [{ name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' }],
+                constraints: [],
+                indexes: [],
+                foreign_keys: [],
+                triggers: [],
+            },
+            {
+                name: 'posts',
+                description: null,
+                columns: [
+                    { name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                    { name: 'user_id', description: null, position: 2, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                ],
+                constraints: [],
+                indexes: [],
+                foreign_keys: [
+                    {
+                        name: 'posts_user_id_users_id_fk', // Different name but same structure
+                        description: null,
+                        columns: ['user_id'],
+                        foreign_table: 'users',
+                        foreign_columns: ['id'],
+                        on_update: 'NO ACTION',
+                        on_delete: 'CASCADE',
+                        match_option: 'SIMPLE',
+                    },
+                ],
+                triggers: [],
+            },
+        ],
+    }
+
+    const report = createJsonDiffReport(schemaA, schemaB)
+
+    // Should NOT detect changes because FKs are semantically identical
+    assert.strictEqual(report.has_changes, false, 'Semantically identical FKs should not cause changes')
+    assert.strictEqual(report.tables.modified.length, 0)
+})
+
+test('json: index predicate normalization should handle formatting differences', () => {
+    const schemaA: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [
+                    { name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                    { name: 'is_active', description: null, position: 2, data_type: 'boolean', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'bool' },
+                ],
+                constraints: [],
+                indexes: [
+                    {
+                        name: 'active_users_idx',
+                        description: null,
+                        definition: '',
+                        is_constraint_index: false,
+                        is_unique: false,
+                        nulls_not_distinct: false,
+                        is_valid: true,
+                        index_type: 'btree',
+                        columns: [{ name: 'id', sort_order: 'ASC', nulls_order: 'NULLS LAST' }],
+                        predicate: 'is_active IS NOT NULL', // Without parens
+                    },
+                ],
+                foreign_keys: [],
+                triggers: [],
+            },
+        ],
+    }
+    const schemaB: RemoteSchema = {
+        ...createEmptySchema(),
+        tables: [
+            {
+                name: 'users',
+                description: null,
+                columns: [
+                    { name: 'id', description: null, position: 1, data_type: 'integer', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'int4' },
+                    { name: 'is_active', description: null, position: 2, data_type: 'boolean', is_nullable: false, default: null, is_generated: false, generation_expression: null, is_identity: false, identity_generation: null, max_length: null, numeric_precision: null, numeric_scale: null, udt_name: 'bool' },
+                ],
+                constraints: [],
+                indexes: [
+                    {
+                        name: 'active_users_idx',
+                        description: null,
+                        definition: 'CREATE INDEX active_users_idx ON users (id) WHERE (is_active IS NOT NULL)',
+                        is_constraint_index: false,
+                        is_unique: false,
+                        nulls_not_distinct: false,
+                        is_valid: true,
+                        index_type: 'btree',
+                        columns: [{ name: 'id', sort_order: 'ASC', nulls_order: 'NULLS LAST' }],
+                        predicate: '(is_active IS NOT NULL)', // With parens
+                    },
+                ],
+                foreign_keys: [],
+                triggers: [],
+            },
+        ],
+    }
+
+    const report = createJsonDiffReport(schemaA, schemaB)
+
+    // Should NOT detect changes because predicates are semantically identical
+    assert.strictEqual(report.has_changes, false, 'Predicate formatting differences should be normalized')
+    assert.strictEqual(report.tables.modified.length, 0)
 })

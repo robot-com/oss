@@ -1,7 +1,7 @@
 import { createJiti } from 'jiti'
 import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
-import { fetchSchemaDrizzleORM } from '../../schema/drizzle/fetch'
+import { fetchSchemaDrizzleORMWithNormalizedViews } from '../../schema/drizzle/fetch'
 import type { LocalSchema } from '../../schema/local/types'
 
 interface DrizzleSchemaModule {
@@ -40,8 +40,8 @@ export async function loadDrizzleSchemaFromFile(
             )
         }
 
-        // Convert to LocalSchema using existing function
-        return fetchSchemaDrizzleORM(schemaObj)
+        // Convert to LocalSchema and normalize view definitions using PGLite
+        return fetchSchemaDrizzleORMWithNormalizedViews(schemaObj)
     } catch (error: any) {
         throw new Error(
             `Failed to load Drizzle schema from ${filePath}\n${error.message}`,

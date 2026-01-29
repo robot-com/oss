@@ -111,7 +111,7 @@ test('fetch foreign keys and indexes', async () => {
     assert.equal(postsTable.indexes?.length, 1)
     const idx = postsTable.indexes![0]
     assert.equal(idx.name, 'title_idx')
-    assert.deepEqual(idx.columns, [{ name: 'title' }])
+    assert.deepEqual(idx.columns, [{ name: 'title', sort_order: 'ASC', nulls_order: 'NULLS LAST' }])
 })
 
 test('fetch composite primary key', async () => {
@@ -215,9 +215,9 @@ test('fetch complex edge cases: composite unique, check constraints, self-refere
     )
     assert.ok(compositeIdx, 'Composite Index missing')
     assert.deepEqual(compositeIdx.columns, [
-        { name: 'entity_type' },
-        { name: 'entity_id' },
-        { name: 'created_at' },
+        { name: 'entity_type', sort_order: 'ASC', nulls_order: 'NULLS LAST' },
+        { name: 'entity_id', sort_order: 'ASC', nulls_order: 'NULLS LAST' },
+        { name: 'created_at', sort_order: 'ASC', nulls_order: 'NULLS LAST' },
     ])
 
     const checkConstraint = auditTable.constraints?.find(

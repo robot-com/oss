@@ -7,17 +7,28 @@ import { localSchemaToRemoteSchema } from '../../schema/local/to-remote'
 
 export type SourceType = 'auto' | 'postgres' | 'drizzle' | 'json'
 
+export interface LoadSchemaOptions {
+    /**
+     * Normalize view definitions using PGLite.
+     * Ensures consistent formatting across different PostgreSQL versions.
+     * @default true
+     */
+    normalizeViews?: boolean
+}
+
 export async function loadSchema(
     source: string,
     type: SourceType = 'auto',
+    options: LoadSchemaOptions = {},
 ): Promise<RemoteSchema> {
+    const { normalizeViews = true } = options
     const detectedType = type === 'auto' ? detectSourceType(source) : type
 
     switch (detectedType) {
         case 'postgres': {
             const db = postgres(source)
             try {
-                const schema = await fetchSchemaPostgresSQL(db)
+                const schema = await fetchSchemaPostgresSQL(db, { normalizeViews })
                 await db.end()
                 return schema
             } catch (error) {

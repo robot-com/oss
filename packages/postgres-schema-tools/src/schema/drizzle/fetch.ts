@@ -1,6 +1,7 @@
 // drizzle/fetch.ts
 /** biome-ignore-all lint/suspicious/noExplicitAny: OK */
 
+import { PGlite } from '@electric-sql/pglite'
 import { getTableColumns, getTableName, is, SQL } from 'drizzle-orm'
 import {
     getTableConfig,
@@ -14,10 +15,12 @@ import {
 } from 'drizzle-orm/pg-core'
 import type { ReferentialAction } from '../common'
 import type {
+    LocalIndexColumn,
     LocalSchema,
     LocalTableDefinition,
     LocalViewDefinition,
 } from '../local/types'
+import type { SortOrder } from '../common/types'
 
 export type DrizzleColumnType =
     | 'string'
@@ -77,8 +80,11 @@ export function mapDrizzleColumnTypeToPostgres(columnType: string): string {
         PgTimestamp: 'timestamp without time zone',
         PgTimestampString: 'timestamp without time zone',
         PgDate: 'date',
+        PgDateString: 'date',
         PgTime: 'time without time zone',
+        PgTimeString: 'time without time zone',
         PgInterval: 'interval',
+        PgIntervalString: 'interval',
 
         // UUID
         PgUUID: 'uuid',
@@ -220,18 +226,8 @@ export function mapDefaultValueToSql(defaultValue: any): string {
         return `'${defaultValue.toISOString()}'`
     }
 
-    if (Array.isArray(defaultValue)) {
-        const arrayContent = defaultValue
-            .map((item) => {
-                if (typeof item === 'string') {
-                    return `"${item.replace(/"/g, '\\"')}"`
-                }
-                return String(item)
-            })
-            .join(',')
-        return `'{${arrayContent}}'`
-    }
-
+    // For JSON/JSONB columns, arrays should be serialized as JSON, not PostgreSQL array syntax
+    // This also handles objects - both are JSON serialized
     if (typeof defaultValue === 'object') {
         return `'${JSON.stringify(defaultValue)}'`
     }
@@ -323,6 +319,24 @@ export function fetchSchemaDrizzleORM(
                         // Try to get more specific type info from the column object
                         // Access columnType which contains the actual SQL type definition (e.g., 'PgNumeric', 'PgUUID')
                         sqlType = mapDrizzleColumnTypeToPostgres(column.columnType)
+
+                        // Handle varchar/char with length
+                        if (
+                            (column.columnType === 'PgVarchar' ||
+                                column.columnType === 'PgChar') &&
+                            (column as any).length
+                        ) {
+                            sqlType = `${sqlType}(${(column as any).length})`
+                        }
+
+                        // Handle timestamp with timezone
+                        if (
+                            column.columnType === 'PgTimestamp' &&
+                            (column as any).withTimezone
+                        ) {
+                            sqlType = 'timestamp with time zone'
+                        }
+
                         defaultValue =
                             column.default !== undefined
                                 ? mapDefaultValueToSql(column.default)
@@ -381,6 +395,7 @@ export function fetchSchemaDrizzleORM(
             }
 
             // 3. Map Unique Constraints -> Constraints
+            // First, handle table-level unique constraints defined via unique()
             for (const uq of tableConfig.uniqueConstraints) {
                 table.constraints?.push({
                     name: uq.name ?? `${tableName}_unique_idx`,
@@ -388,6 +403,26 @@ export function fetchSchemaDrizzleORM(
                     columns: uq.columns.map((c) => c.name),
                     nulls_not_distinct: uq.nullsNotDistinct,
                 })
+            }
+
+            // Then, handle column-level unique constraints defined via .unique() on columns
+            // These are stored on the column itself, not in tableConfig.uniqueConstraints
+            for (const column of Object.values(columns)) {
+                const col = column as any
+                if (col.isUnique && col.uniqueName) {
+                    // Only add if not already handled by tableConfig.uniqueConstraints
+                    const alreadyExists = table.constraints?.some(
+                        (c) => c.name === col.uniqueName,
+                    )
+                    if (!alreadyExists) {
+                        table.constraints?.push({
+                            name: col.uniqueName,
+                            type: 'UNIQUE',
+                            columns: [col.name],
+                            nulls_not_distinct: col.uniqueType === 'not distinct',
+                        })
+                    }
+                }
             }
 
             // 4. Map Checks -> Constraints
@@ -401,16 +436,71 @@ export function fetchSchemaDrizzleORM(
 
             // 5. Map Indexes
             for (const idx of tableConfig.indexes) {
+                // Extract predicate (WHERE clause) for partial indexes
+                const predicate = idx.config.where
+                    ? unwrapSql(idx.config.where)
+                    : undefined
+
                 table.indexes?.push({
                     name: idx.config.name ?? `${tableName}_idx`,
                     is_unique: idx.config.unique,
                     index_type: idx.config.method,
                     columns: idx.config.columns.map((c) => {
-                        const colName = is(c, PgTable)
-                            ? getTableName(c)
-                            : (c as PgColumn).name
-                        return { name: colName }
+                        if (is(c, PgTable)) {
+                            return { name: getTableName(c) }
+                        }
+
+                        // Handle SQL expressions (e.g., sql`${t.name} gin_trgm_ops`)
+                        if (is(c, SQL)) {
+                            // Extract column from SQL queryChunks
+                            const chunks = (c as any).queryChunks as any[]
+                            const columnChunk = chunks?.find(
+                                (chunk) =>
+                                    chunk &&
+                                    typeof chunk === 'object' &&
+                                    'name' in chunk &&
+                                    typeof chunk.name === 'string',
+                            )
+                            if (columnChunk) {
+                                const indexConfig = columnChunk.indexConfig as
+                                    | {
+                                          order?: 'asc' | 'desc'
+                                          nulls?: 'first' | 'last'
+                                      }
+                                    | undefined
+                                return {
+                                    name: columnChunk.name,
+                                    sort_order:
+                                        (indexConfig?.order?.toUpperCase() ??
+                                            'ASC') as SortOrder,
+                                    nulls_order: indexConfig?.nulls
+                                        ? indexConfig.nulls === 'first'
+                                            ? 'NULLS FIRST'
+                                            : 'NULLS LAST'
+                                        : undefined,
+                                } as LocalIndexColumn
+                            }
+                            // Fallback: return without name (will need to be handled in comparison)
+                            return { sort_order: 'ASC' as SortOrder } as LocalIndexColumn
+                        }
+
+                        const col = c as PgColumn
+                        // IndexedColumn has indexConfig with order and nulls
+                        const indexConfig = (col as any).indexConfig as
+                            | { order?: 'asc' | 'desc'; nulls?: 'first' | 'last' }
+                            | undefined
+                        const sortOrder = (indexConfig?.order?.toUpperCase() ?? 'ASC') as SortOrder
+                        return {
+                            name: col.name,
+                            sort_order: sortOrder,
+                            nulls_order: indexConfig?.nulls
+                                ? indexConfig.nulls === 'first'
+                                    ? 'NULLS FIRST'
+                                    : 'NULLS LAST'
+                                : undefined,
+                        } as LocalIndexColumn
                     }),
+                    predicate,
                 })
             }
 
@@ -444,6 +534,119 @@ export function fetchSchemaDrizzleORM(
                     : '',
             }
             localSchema.views?.push(view)
+        }
+    }
+
+    return localSchema
+}
+
+/**
+ * Normalizes a view definition using PostgreSQL itself.
+ * Creates a temporary view and reads back the canonical definition.
+ */
+async function normalizeViewDefinitionWithPGLite(
+    pglite: PGlite,
+    viewName: string,
+    definition: string,
+): Promise<string> {
+    const tempViewName = `_temp_${viewName}_${Date.now()}`
+    try {
+        await pglite.query(`CREATE VIEW ${tempViewName} AS ${definition}`)
+        const result = await pglite.query<{ def: string }>(
+            `SELECT pg_get_viewdef('${tempViewName}'::regclass, true) as def`,
+        )
+        return result.rows[0]?.def ?? definition
+    } catch {
+        return definition
+    } finally {
+        try {
+            await pglite.query(`DROP VIEW IF EXISTS ${tempViewName}`)
+        } catch {
+            // Ignore cleanup errors
+        }
+    }
+}
+
+/**
+ * Normalizes a view definition string using PGLite.
+ * This creates stub tables with text columns to allow the view to be created,
+ * then reads back the canonical definition from PostgreSQL.
+ *
+ * @param definition The view definition SQL to normalize
+ * @param referencedTables Names of tables referenced by the view (optional, for better stub generation)
+ * @returns The normalized view definition
+ */
+export async function normalizeViewDefinition(
+    definition: string,
+    referencedTables: Array<{ name: string; columns: string[] }> = [],
+): Promise<string> {
+    const pglite = new PGlite()
+    try {
+        // Create stub tables so view can reference them
+        for (const table of referencedTables) {
+            const columns = table.columns.map((c) => `"${c}" text`).join(', ')
+            await pglite
+                .query(`CREATE TABLE "${table.name}" (${columns})`)
+                .catch(() => {})
+        }
+
+        const tempViewName = `_temp_view_${Date.now()}`
+        await pglite.query(`CREATE VIEW ${tempViewName} AS ${definition}`)
+        const result = await pglite.query<{ def: string }>(
+            `SELECT pg_get_viewdef('${tempViewName}'::regclass, true) as def`,
+        )
+        return result.rows[0]?.def ?? definition
+    } catch {
+        return definition
+    } finally {
+        await pglite.close()
+    }
+}
+
+/**
+ * Fetches schema from Drizzle ORM and normalizes view definitions using PostgreSQL.
+ * This ensures view definitions match the canonical format stored by PostgreSQL,
+ * enabling accurate comparison between Drizzle schemas and database schemas.
+ */
+export async function fetchSchemaDrizzleORMWithNormalizedViews(
+    schema: Record<string, unknown>,
+): Promise<LocalSchema> {
+    const localSchema = fetchSchemaDrizzleORM(schema)
+
+    // Normalize view definitions if there are any views
+    if (localSchema.views && localSchema.views.length > 0) {
+        const pglite = new PGlite()
+        try {
+            // First create all enums needed by tables
+            for (const enumDef of localSchema.enums ?? []) {
+                const values = enumDef.values.map((v) => `'${v}'`).join(', ')
+                await pglite
+                    .query(`CREATE TYPE "${enumDef.name}" AS ENUM (${values})`)
+                    .catch(() => {})
+            }
+
+            // Create stub tables so views can reference them
+            for (const table of localSchema.tables ?? []) {
+                const columns = table.columns
+                    .map((c) => `"${c.name}" text`)
+                    .join(', ')
+                await pglite
+                    .query(`CREATE TABLE "${table.name}" (${columns})`)
+                    .catch(() => {})
+            }
+
+            // Now normalize view definitions
+            for (const view of localSchema.views) {
+                if (view.definition) {
+                    view.definition = await normalizeViewDefinitionWithPGLite(
+                        pglite,
+                        view.name,
+                        view.definition,
+                    )
+                }
+            }
+        } finally {
+            await pglite.close()
         }
     }
 

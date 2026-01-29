@@ -781,3 +781,108 @@ test('drizzle: push Drizzle-generated schema to database and verify round-trip',
     )
     assert.equal(Number(postCount.rows[0].count), 0)
 })
+
+test('drizzle: ZERO DIFF after round-trip (push Drizzle schema to DB, fetch, compare)', async () => {
+    const { createJsonDiffReport } = await import('../report/json')
+    const { localSchemaToRemoteSchema } = await import(
+        '../schema/local/to-remote'
+    )
+
+    // Create a comprehensive Drizzle schema with all features
+    const statusEnum = pgEnum('status', ['active', 'inactive', 'pending'])
+
+    const users = pgTable(
+        'users',
+        {
+            id: serial('id').primaryKey(),
+            email: text('email').notNull(),
+            status: statusEnum('status').notNull().default('pending'),
+            metadata: jsonb('metadata').default({}),
+            createdAt: timestamp('created_at', { withTimezone: true })
+                .notNull()
+                .default(sql`NOW()`),
+        },
+        (t) => [
+            unique('users_email_unique').on(t.email),
+            check('users_email_format', sql`${t.email} LIKE '%@%'`),
+            index('idx_users_status').on(t.status),
+        ],
+    )
+
+    const posts = pgTable(
+        'posts',
+        {
+            id: serial('id').primaryKey(),
+            userId: integer('user_id')
+                .notNull()
+                .references(() => users.id, { onDelete: 'cascade' }),
+            title: text('title').notNull(),
+            content: text('content'),
+            publishedAt: timestamp('published_at', { withTimezone: true }),
+        },
+        (t) => [
+            check('posts_title_length', sql`LENGTH(${t.title}) >= 3`),
+            index('idx_posts_user_id').on(t.userId),
+        ],
+    )
+
+    // 1. Get schema from Drizzle and convert to RemoteSchema
+    const drizzleLocalSchema = fetchSchemaDrizzleORM({ statusEnum, users, posts })
+    const drizzleRemoteSchema = localSchemaToRemoteSchema(drizzleLocalSchema)
+
+    // 2. Push to database
+    const db = await createLocalDatabase({})
+    const client = db.$client
+
+    const statements = generatePushNewSchema(drizzleLocalSchema)
+    for (const s of statements) {
+        const parts = s
+            .split(/;\s*\n|;\s*$/g)
+            .map((p) => p.trim())
+            .filter(Boolean)
+        for (const p of parts) {
+            await client.query(p)
+        }
+    }
+
+    // 3. Fetch back from database
+    const fetchedSchema = await fetchSchemaPgLite(client)
+
+    // 4. Compare and verify ZERO differences
+    const report = createJsonDiffReport(drizzleRemoteSchema, fetchedSchema)
+
+    // Debug output if there are differences
+    if (report.has_changes) {
+        console.log('\n========== UNEXPECTED DIFF DETECTED ==========')
+        console.log(JSON.stringify(report, null, 2))
+        console.log('\n--- Drizzle Schema ---')
+        console.log(JSON.stringify(drizzleRemoteSchema, null, 2))
+        console.log('\n--- Fetched Schema ---')
+        console.log(JSON.stringify(fetchedSchema, null, 2))
+        console.log('===============================================\n')
+    }
+
+    assert.strictEqual(
+        report.has_changes,
+        false,
+        'Round-trip should produce ZERO differences. ' +
+            'Enums: added=' +
+            report.enums.added.length +
+            ', removed=' +
+            report.enums.removed.length +
+            ', modified=' +
+            report.enums.modified.length +
+            '. Tables: added=' +
+            report.tables.added.length +
+            ', removed=' +
+            report.tables.removed.length +
+            ', modified=' +
+            report.tables.modified.length +
+            '. Views: added=' +
+            report.views.added.length +
+            ', removed=' +
+            report.views.removed.length +
+            ', modified=' +
+            report.views.modified.length,
+    )
+})

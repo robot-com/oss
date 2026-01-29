@@ -3,7 +3,7 @@
     "bin": {
         "postgres-schema-tools": "./bin.js"
     },
-    "version": "0.0.8",
+    "version": "0.0.9",
     "type": "module",
     "license": "MIT",
     "private": true,
@@ -19,6 +19,9 @@
     "devDependencies": {
         "@electric-sql/pglite": "^0.3.7",
         "@types/node": "^24.3.0",
+        "@types/pg": "^8.16.0",
+        "drizzle-kit": "^0.31.4",
+        "pg": "^8.17.2",
         "tsx": "^4.20.3",
         "typescript": "^5.9.2"
     },
