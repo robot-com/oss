@@ -4,70 +4,91 @@ import postgres from 'postgres'
 import { createMarkdownReport } from '../report'
 import { createJsonDiffReport } from '../report/json'
 import { fetchSchemaPostgresSQL } from '../schema'
+import { createSchemaFetchCommand } from './commands/schema-fetch'
+import { createSchemaDiffCommand } from './commands/schema-diff'
+import { createSchemaPushCommand } from './commands/schema-push'
+import { createMigrateGenerateCommand } from './commands/migrate-generate'
 
 const program = new Command()
 
 program
     .name('postgres-schema-tools')
-    .description('Tools for managing Postgres database schemas.')
-    .version('0.0.1')
+    .description('Tools for managing Postgres database schemas')
+    .version('0.0.6')
 
+// Schema commands
+const schema = program
+    .command('schema')
+    .description('Schema operations (fetch, diff, push)')
+
+schema.addCommand(createSchemaFetchCommand())
+schema.addCommand(createSchemaDiffCommand())
+schema.addCommand(createSchemaPushCommand())
+
+// Migrate commands
+const migrate = program
+    .command('migrate')
+    .description('Migration operations (generate, apply)')
+
+migrate.addCommand(createMigrateGenerateCommand())
+
+// Backward compatibility: keep diff-report as deprecated alias
 program
     .command('diff-report')
-    .description('Compare two database schemas and generate a report.')
-    .argument('<dbA>', 'The first url to compare.')
-    .argument('<dbB>', 'The second url schema to compare.')
-    .option('--out-dir <dir>', 'The output directory for the report.')
+    .description('[DEPRECATED] Use "schema diff" instead')
+    .argument('<dbA>', 'First database URL')
+    .argument('<dbB>', 'Second database URL')
+    .option('--out-dir <dir>', 'Output directory')
     .option(
         '--fail-on-changes',
-        'Exit with a non-zero code if there are changes.',
+        'Exit with code 1 if changes detected',
         false,
     )
-    .action(async (db1Url, db2Url, opts) => {
-        const db1 = postgres(db1Url)
-        const db2 = postgres(db2Url)
+    .action(async (dbA, dbB, opts) => {
+        console.warn(
+            '⚠️  Warning: "diff-report" is deprecated. Use "schema diff" instead.\n',
+        )
 
-        const failIfChanges = opts.failOnChanges
-        const outDir = opts.outDir
+        const db1 = postgres(dbA)
+        const db2 = postgres(dbB)
 
         try {
             const schema1 = await fetchSchemaPostgresSQL(db1)
             const schema2 = await fetchSchemaPostgresSQL(db2)
+            const report = createJsonDiffReport(schema1, schema2)
 
-            const jsonReport = createJsonDiffReport(schema1, schema2)
-
-            if (outDir) {
-                // TODO: Write report to file
-                await mkdir(outDir, { recursive: true })
+            if (opts.outDir) {
+                await mkdir(opts.outDir, { recursive: true })
                 await writeFile(
-                    `${outDir}/schema1.json`,
+                    `${opts.outDir}/schema1.json`,
                     JSON.stringify(schema1, null, 2),
                 )
                 await writeFile(
-                    `${outDir}/schema2.json`,
+                    `${opts.outDir}/schema2.json`,
                     JSON.stringify(schema2, null, 2),
                 )
                 await writeFile(
-                    `${outDir}/report.json`,
-                    JSON.stringify(jsonReport, null, 2),
+                    `${opts.outDir}/report.json`,
+                    JSON.stringify(report, null, 2),
                 )
                 await writeFile(
-                    `${outDir}/report.md`,
-                    createMarkdownReport(jsonReport),
+                    `${opts.outDir}/report.md`,
+                    createMarkdownReport(report),
                 )
             } else {
-                console.log(createMarkdownReport(jsonReport))
+                console.log(createMarkdownReport(report))
             }
 
-            if (jsonReport.has_changes && failIfChanges) {
+            if (report.has_changes && opts.failOnChanges) {
                 process.exit(1)
             }
         } catch (e) {
             console.error(e)
+            process.exit(1)
+        } finally {
+            await db1.end()
+            await db2.end()
         }
-
-        db1.end()
-        db2.end()
     })
 
 program.parse()

@@ -28,6 +28,7 @@
     "dependencies": {
         "commander": "^14.0.0",
         "drizzle-orm": "^0.44.4",
+        "jiti": "^2.0.0",
         "postgres": "^3.4.7"
     }
 }
