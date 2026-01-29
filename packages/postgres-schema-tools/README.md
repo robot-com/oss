@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@robot.com/postgres-schema-tools.svg)](https://www.npmjs.com/package/@robot.com/postgres-schema-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Status**: Active development. Version 0.0.5 is functional but not recommended for production use yet.
+**Status**: Active development. Version 0.0.7 is functional but not recommended for production use yet.
 
 ---
 
@@ -180,9 +180,180 @@ const localSchema = fetchSchemaDrizzleORM(schema)
 
 ## CLI Usage
 
-The `postgres-schema-tools` CLI provides commands for schema comparison and reporting.
+The `postgres-schema-tools` CLI provides comprehensive commands for schema operations.
 
-### Command: `diff-report`
+```
+postgres-schema-tools
+├── schema
+│   ├── fetch    # Extract schema from source
+│   ├── diff     # Compare two schemas
+│   └── push     # Apply schema to database
+├── migrate
+│   └── generate # Generate migration SQL
+└── diff-report  # [DEPRECATED] Legacy command
+```
+
+### Installation
+
+```bash
+# Run directly with npx
+npx @robot.com/postgres-schema-tools schema fetch ./schema.ts
+
+# Or install globally
+npm install -g @robot.com/postgres-schema-tools
+```
+
+---
+
+### Command: `schema fetch`
+
+Fetch schema from a database, Drizzle TypeScript file, or JSON file.
+
+```bash
+postgres-schema-tools schema fetch <source> [options]
+```
+
+**Arguments:**
+- `<source>` - Database URL, TypeScript file path, or JSON file path
+
+**Options:**
+- `--type <type>` - Source type: `auto` | `postgres` | `drizzle` | `json` (default: `auto`)
+- `--output <path>` - Output file path (default: stdout)
+- `--format <format>` - Output format: `json` | `yaml` (default: `json`)
+
+**Examples:**
+
+```bash
+# Fetch from Drizzle TypeScript schema
+postgres-schema-tools schema fetch ./src/db/schema.ts
+
+# Fetch from PostgreSQL database
+postgres-schema-tools schema fetch "postgres://user:pass@localhost/mydb"
+
+# Save to file
+postgres-schema-tools schema fetch ./schema.ts --output schema.json
+
+# Explicit type (useful if auto-detection fails)
+postgres-schema-tools schema fetch ./schema.ts --type drizzle
+```
+
+---
+
+### Command: `schema diff`
+
+Compare two schemas and generate a diff report.
+
+```bash
+postgres-schema-tools schema diff <sourceA> <sourceB> [options]
+```
+
+**Arguments:**
+- `<sourceA>` - First schema source (database URL or file path)
+- `<sourceB>` - Second schema source (database URL or file path)
+
+**Options:**
+- `--type-a <type>` - Type of sourceA: `auto` | `postgres` | `drizzle` | `json` (default: `auto`)
+- `--type-b <type>` - Type of sourceB: `auto` | `postgres` | `drizzle` | `json` (default: `auto`)
+- `--output <path>` - Output file path (default: stdout)
+- `--format <format>` - Output format: `json` | `markdown` (default: `markdown`)
+- `--fail-on-changes` - Exit with code 1 if differences detected (for CI)
+
+**Examples:**
+
+```bash
+# Compare Drizzle schema with database
+postgres-schema-tools schema diff ./src/schema.ts "$DATABASE_URL"
+
+# Compare two databases
+postgres-schema-tools schema diff "$PROD_URL" "$STAGING_URL"
+
+# Output JSON report to file
+postgres-schema-tools schema diff ./schema.ts "$DATABASE_URL" \
+  --format json --output diff-report.json
+
+# CI mode - fail if schemas differ
+postgres-schema-tools schema diff ./schema.ts "$DATABASE_URL" --fail-on-changes
+```
+
+---
+
+### Command: `schema push`
+
+Push schema changes to a target database.
+
+```bash
+postgres-schema-tools schema push <source> <target> [options]
+```
+
+**Arguments:**
+- `<source>` - Source schema (file path or database URL)
+- `<target>` - Target database URL
+
+**Options:**
+- `--type <type>` - Source type: `auto` | `postgres` | `drizzle` | `json` (default: `auto`)
+- `--mode <mode>` - Push mode: `new` | `diff` (default: `diff`)
+- `--dry-run` - Generate SQL without executing
+- `--output <path>` - Save generated SQL to file
+- `--yes` - Skip confirmation prompts
+
+**Examples:**
+
+```bash
+# Preview migration (dry-run)
+postgres-schema-tools schema push ./schema.ts "$DATABASE_URL" --dry-run
+
+# Generate and save migration SQL
+postgres-schema-tools schema push ./schema.ts "$DATABASE_URL" \
+  --dry-run --output migration.sql
+
+# Execute migration (with confirmation)
+postgres-schema-tools schema push ./schema.ts "$DATABASE_URL"
+
+# Execute migration (skip confirmation)
+postgres-schema-tools schema push ./schema.ts "$DATABASE_URL" --yes
+
+# Create new schema (no diff, fresh database)
+postgres-schema-tools schema push ./schema.ts "$DATABASE_URL" --mode new --yes
+```
+
+---
+
+### Command: `migrate generate`
+
+Generate migration SQL between two schemas without executing.
+
+```bash
+postgres-schema-tools migrate generate <from> <to> [options]
+```
+
+**Arguments:**
+- `<from>` - Current/source schema (database URL or file path)
+- `<to>` - Target schema (database URL or file path)
+
+**Options:**
+- `--type-from <type>` - Type of from source (default: `auto`)
+- `--type-to <type>` - Type of to source (default: `auto`)
+- `--output <path>` - Output SQL file (default: stdout)
+- `--format <format>` - Output format: `sql` | `batched` (default: `sql`)
+
+**Examples:**
+
+```bash
+# Generate migration from production to Drizzle schema
+postgres-schema-tools migrate generate "$PROD_URL" ./schema.ts
+
+# Save migration to file
+postgres-schema-tools migrate generate "$PROD_URL" ./schema.ts --output migration.sql
+
+# Output as JSON batches (for programmatic use)
+postgres-schema-tools migrate generate "$PROD_URL" ./schema.ts --format batched
+```
+
+---
+
+### Command: `diff-report` (Deprecated)
+
+> **Deprecated**: Use `schema diff` instead.
 
 Compare two databases and generate a comprehensive report:
 
@@ -198,41 +369,24 @@ postgres-schema-tools diff-report <dbA> <dbB> [options]
 - `--out-dir <directory>` - Output directory for reports
 - `--fail-on-changes` - Exit with code 1 if differences are detected (for CI)
 
-### Examples
+**Example:**
 
-**Basic comparison (output to stdout):**
 ```bash
-postgres-schema-tools diff-report \
-  "postgres://localhost/production" \
-  "postgres://localhost/staging"
-```
-
-**Generate report files:**
-```bash
-postgres-schema-tools diff-report \
-  "postgres://localhost/prod" \
-  "postgres://localhost/staging" \
-  --out-dir ./schema-report
+postgres-schema-tools diff-report "$PROD_URL" "$STAGING_URL" --out-dir ./report
 ```
 
 This creates:
-- `schema-report/schema1.json` - Full schema A (formatted JSON)
-- `schema-report/schema2.json` - Full schema B (formatted JSON)
-- `schema-report/report.json` - Detailed diff report (formatted JSON)
-- `schema-report/report.md` - Human-readable Markdown report
+- `report/schema1.json` - Full schema A
+- `report/schema2.json` - Full schema B
+- `report/report.json` - Detailed diff report
+- `report/report.md` - Human-readable Markdown report
 
-**CI/CD integration:**
-```bash
-postgres-schema-tools diff-report \
-  "$PROD_DATABASE_URL" \
-  "$STAGING_DATABASE_URL" \
-  --out-dir ./report \
-  --fail-on-changes
-```
+---
 
-Exit codes:
-- `0` - No changes detected or success
-- `1` - Changes detected (with `--fail-on-changes`) or error occurred
+### Exit Codes
+
+- `0` - Success (or no changes when using `--fail-on-changes`)
+- `1` - Error occurred or changes detected (with `--fail-on-changes`)
 
 ### CI/CD Example (GitHub Actions)
 
@@ -248,12 +402,13 @@ jobs:
       - uses: actions/setup-node@v4
       - run: npm install
 
-      - name: Compare schemas
+      - name: Compare Drizzle schema with production
         run: |
-          npx postgres-schema-tools diff-report \
-            "${{ secrets.PROD_DATABASE_URL }}" \
-            "${{ secrets.STAGING_DATABASE_URL }}" \
-            --out-dir ./schema-diff \
+          npx @robot.com/postgres-schema-tools schema diff \
+            ./src/db/schema.ts \
+            "${{ secrets.DATABASE_URL }}" \
+            --format markdown \
+            --output ./schema-diff.md \
             --fail-on-changes
 
       - name: Upload report
@@ -261,7 +416,18 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: schema-diff
-          path: ./schema-diff/
+          path: ./schema-diff.md
+```
+
+**Alternative: Compare two databases**
+
+```yaml
+      - name: Compare staging with production
+        run: |
+          npx @robot.com/postgres-schema-tools schema diff \
+            "${{ secrets.PROD_DATABASE_URL }}" \
+            "${{ secrets.STAGING_DATABASE_URL }}" \
+            --fail-on-changes
 ```
 
 ---
@@ -1134,7 +1300,15 @@ src/
 ├── db/                 # Database utilities
 │   └── index.ts       # createLocalDatabase (PGlite)
 ├── bin/                # CLI
-│   └── main.ts        # postgres-schema-tools command
+│   ├── main.ts        # CLI entry point
+│   ├── commands/      # CLI commands
+│   │   ├── schema-fetch.ts
+│   │   ├── schema-diff.ts
+│   │   ├── schema-push.ts
+│   │   └── migrate-generate.ts
+│   └── utils/         # CLI utilities
+│       ├── drizzle-loader.ts  # Dynamic TS loading with jiti
+│       └── source-loader.ts   # Unified schema loading
 └── tests/              # Test suite (108 tests)
 ```
 
