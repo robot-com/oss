@@ -33,4 +33,35 @@ export async function buildBundles(pkg) {
         target: ['node20'],
         format: ['cjs', 'esm'],
     })
+
+    // Build bin entry points with shebang
+    if (pkg.bin) {
+        /** @type {Entry} */
+        const binEntry = {}
+        for (const [, path] of Object.entries(pkg.bin)) {
+            // Extract name from path (e.g., "./bin.js" -> "bin")
+            const name = path.replace('./', '').replace('.js', '')
+            // Find the source file for this bin entry in exports
+            const binExport = pkg.exports[`./${name}`]
+            if (binExport) {
+                binEntry[name] = binExport
+            }
+        }
+
+        if (Object.keys(binEntry).length > 0) {
+            await build({
+                entry: binEntry,
+                platform: 'node',
+                splitting: false,
+                sourcemap: true,
+                clean: false,
+                dts: false,
+                target: ['node20'],
+                format: ['esm'],
+                banner: {
+                    js: '#!/usr/bin/env node',
+                },
+            })
+        }
+    }
 }
