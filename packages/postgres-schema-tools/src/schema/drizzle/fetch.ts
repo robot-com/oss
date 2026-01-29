@@ -4,13 +4,20 @@
 import { getTableColumns, getTableName, is, SQL } from 'drizzle-orm'
 import {
     getTableConfig,
+    getViewConfig,
     isPgEnum,
+    isPgView,
     type PgColumn,
     PgDialect,
     PgTable,
+    type PgView,
 } from 'drizzle-orm/pg-core'
 import type { ReferentialAction } from '../common'
-import type { LocalSchema, LocalTableDefinition } from '../local/types'
+import type {
+    LocalSchema,
+    LocalTableDefinition,
+    LocalViewDefinition,
+} from '../local/types'
 
 export type DrizzleColumnType =
     | 'string'
@@ -274,8 +281,19 @@ export function fetchSchemaDrizzleORM(
                 let sqlType: string
                 let defaultValue: string | undefined
 
-                // Check if this is an array column
-                if (column.dataType === 'array' && (column as any).baseColumn) {
+                // Check if this is an enum column
+                if (column.columnType === 'PgEnumColumn') {
+                    // Enum columns have the enum object with enumName property
+                    const enumObj = (column as any).enum as
+                        | { enumName: string }
+                        | undefined
+                    sqlType = enumObj?.enumName || 'text' // Use enum type name, fallback to text
+                    defaultValue =
+                        column.default !== undefined
+                            ? mapDefaultValueToSql(column.default)
+                            : undefined
+                } else if (column.dataType === 'array' && (column as any).baseColumn) {
+                    // Check if this is an array column
                     const baseColumn = (column as any).baseColumn
                     const baseType = baseColumn.columnType
                         ? mapDrizzleColumnTypeToPostgres(baseColumn.columnType)
@@ -319,6 +337,15 @@ export function fetchSchemaDrizzleORM(
                             : undefined
                 }
 
+                // Check for generated columns
+                const generated = (column as any).generated as
+                    | { as: unknown; mode?: string }
+                    | undefined
+                const isGenerated = generated !== undefined
+                const generationExpression = isGenerated
+                    ? unwrapSql(generated.as)
+                    : undefined
+
                 table.columns.push({
                     name: column.name,
                     data_type: sqlType,
@@ -327,6 +354,8 @@ export function fetchSchemaDrizzleORM(
                     // Note: is_identity should be set for GENERATED ... AS IDENTITY columns
                     // Drizzle doesn't currently expose this information, so we leave it undefined
                     is_identity: undefined,
+                    is_generated: isGenerated,
+                    generation_expression: generationExpression,
                 })
             }
 
@@ -401,6 +430,20 @@ export function fetchSchemaDrizzleORM(
             }
 
             localSchema.tables?.push(table)
+            continue
+        }
+
+        // Handle Views
+        if (isPgView(value)) {
+            const viewConfig = getViewConfig(value as PgView)
+            const view: LocalViewDefinition = {
+                name: viewConfig.name,
+                // For non-existing views, compile the query to SQL
+                definition: viewConfig.query
+                    ? pgDialect.sqlToQuery(viewConfig.query).sql
+                    : '',
+            }
+            localSchema.views?.push(view)
         }
     }
 

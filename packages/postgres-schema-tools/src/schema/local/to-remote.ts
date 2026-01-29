@@ -21,6 +21,72 @@ import type {
     LocalViewDefinition,
 } from './types'
 
+/**
+ * Maps a PostgreSQL data_type to its underlying udt_name.
+ * This is needed because local schemas don't have udt_name,
+ * but remote schemas from the database do.
+ */
+function dataTypeToUdtName(dataType: string): string {
+    // Handle array types
+    if (dataType.endsWith('[]')) {
+        const baseType = dataType.slice(0, -2)
+        return `_${dataTypeToUdtName(baseType)}`
+    }
+
+    const mapping: Record<string, string> = {
+        // Text types
+        text: 'text',
+        'character varying': 'varchar',
+        character: 'bpchar',
+        varchar: 'varchar',
+
+        // Integer types
+        smallint: 'int2',
+        integer: 'int4',
+        bigint: 'int8',
+        serial: 'int4',
+        bigserial: 'int8',
+
+        // Floating point types
+        real: 'float4',
+        'double precision': 'float8',
+        numeric: 'numeric',
+        decimal: 'numeric',
+
+        // Boolean
+        boolean: 'bool',
+
+        // Date/Time types
+        'timestamp without time zone': 'timestamp',
+        'timestamp with time zone': 'timestamptz',
+        timestamp: 'timestamp',
+        timestamptz: 'timestamptz',
+        date: 'date',
+        'time without time zone': 'time',
+        'time with time zone': 'timetz',
+        time: 'time',
+        interval: 'interval',
+
+        // UUID
+        uuid: 'uuid',
+
+        // JSON types
+        json: 'json',
+        jsonb: 'jsonb',
+
+        // Binary
+        bytea: 'bytea',
+
+        // Network types
+        inet: 'inet',
+        cidr: 'cidr',
+        macaddr: 'macaddr',
+        macaddr8: 'macaddr8',
+    }
+
+    return mapping[dataType.toLowerCase()] || dataType
+}
+
 export function localEnumToRemoteEnum(
     localEnum: LocalEnumDefinition,
 ): EnumDefinition {
@@ -58,7 +124,7 @@ export function localColumnToRemoteColumn(
         max_length: localColumn.max_length ?? null,
         numeric_precision: localColumn.numeric_precision ?? null,
         numeric_scale: localColumn.numeric_scale ?? null,
-        udt_name: localColumn.udt_name ?? '',
+        udt_name: localColumn.udt_name ?? dataTypeToUdtName(localColumn.data_type),
     }
 }
 
